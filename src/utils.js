@@ -93,7 +93,7 @@ export async function fetchAllCoins() {
     const base = spotTokens[tokens[0]]?.name || `T${tokens[0]}`
     const quote = spotTokens[tokens[1]]?.name || 'USDC'
     return {
-      displayName: pair.name || `${base}/${quote}`,
+      displayName: (pair.name && !pair.name.startsWith('@')) ? pair.name : `${base}/${quote}`,
       wsName: `@${i}`,
     }
   })
