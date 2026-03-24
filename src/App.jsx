@@ -29,6 +29,9 @@ export default function App() {
   const tradesRef = useRef(trades)
   const soundRef = useRef(soundOn)
 
+  // Track coins key to trigger WS reconnect when coins change
+  const coinsKey = (config.coins || []).sort().join(',')
+
   // Keep refs in sync
   useEffect(() => { configRef.current = config }, [config])
   useEffect(() => { statsRef.current = stats }, [stats])
@@ -55,6 +58,10 @@ export default function App() {
     const dirFilter = cfg.direction_filter || 'all'
     if (dirFilter === 'long' && side !== 'B') return
     if (dirFilter === 'short' && side === 'B') return
+
+    // Coin filter — if specific coins selected, ignore others
+    const trackedCoins = cfg.coins || []
+    if (trackedCoins.length > 0 && !trackedCoins.includes(coin)) return
 
     const timestamp = t.time || 0
     const timeStr = timestamp
@@ -193,7 +200,7 @@ export default function App() {
       clearTimeout(reconnectTimer)
       if (ws) ws.close()
     }
-  }, [processTrade])
+  }, [processTrade, coinsKey])
 
   // Config handlers
   function handleSaveConfig(cfg) {
