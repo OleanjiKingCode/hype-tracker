@@ -92,13 +92,14 @@ export async function fetchAllCoins() {
   // We store them as { name: "PURR/USDC", wsName: "@1" } style
   const spotUniverse = spotData.universe || []
   const spotTokens = spotData.tokens || []
-  const spotCoins = spotUniverse.map((pair, i) => {
+  const spotCoins = spotUniverse.map((pair) => {
     const tokens = pair.tokens || []
     const base = spotTokens[tokens[0]]?.name || `T${tokens[0]}`
     const quote = spotTokens[tokens[1]]?.name || 'USDC'
+    const idx = pair.index ?? pair.name?.replace('@', '')
     return {
       displayName: (pair.name && !pair.name.startsWith('@')) ? pair.name : `${base}/${quote}`,
-      wsName: `@${i}`,
+      wsName: `@${idx}`,
     }
   })
 
