@@ -113,9 +113,11 @@ async def send_telegram(trade: Dict):
     if hash_val and not is_zero_hash:
         tx_link = f'\n\U0001f517 <a href="{HL_EXPLORER}/tx/{hash_val}">View Transaction</a>'
 
+    icon = "\U0001f40b" if whale else "\U0001f514"
+    label = "WHALE ALERT" if whale else "BIG TRADE"
     text = (
-        f"{'\U0001f40b' if whale else '\U0001f514'} "
-        f"<b>{'WHALE ALERT' if whale else 'BIG TRADE'}</b> — {trade['coin']}\n\n"
+        f"{icon} "
+        f"<b>{label}</b> — {trade['coin']}\n\n"
         f"{side_emoji} <b>Direction:</b> {side_text}\n"
         f"\U0001f4b0 <b>Size:</b> {size_str}\n"
         f"\U0001f4b2 <b>Price:</b> ${trade['price']:,.2f}\n"
@@ -156,7 +158,7 @@ async def broadcast(msg_type: str, data):
             await ws.send_str(payload)
         except Exception:
             dead.add(ws)
-    browser_clients -= dead
+    browser_clients.difference_update(dead)
 
 
 # ────────────────────────────────────────────────────────
