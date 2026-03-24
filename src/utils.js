@@ -1,8 +1,12 @@
 export const HL_WS_URL = 'wss://api.hyperliquid.xyz/ws'
 export const HL_INFO_URL = 'https://api.hyperliquid.xyz/info'
 export const HL_EXPLORER = 'https://app.hyperliquid.xyz/explorer'
-export const MAX_TRACKED_COINS = 10
-export const DEFAULT_COINS = ['BTC', 'ETH', 'SOL', 'HYPE', 'XRP', 'SUI', 'DOGE', 'LINK', 'ONDO', 'ARB']
+export const MAX_TRACKED_COINS = 20
+export const DEFAULT_COINS = [
+  'BTC', 'ETH', 'SOL', 'HYPE', 'XRP', 'SUI', 'DOGE', 'LINK',
+  'ONDO', 'ARB', 'PAXG', 'OP', 'AVAX', 'NEAR', 'APT', 'INJ',
+  'TIA', 'SEI', 'RENDER', 'kPEPE',
+]
 
 export function fmtUsd(v) {
   if (v >= 1e6) return '$' + (v / 1e6).toFixed(2) + 'M'
