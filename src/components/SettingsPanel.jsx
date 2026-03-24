@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { MAX_TRACKED_COINS, DEFAULT_COINS } from '../utils'
 
 export default function SettingsPanel({
   open,
@@ -10,36 +11,63 @@ export default function SettingsPanel({
 }) {
   const [minSize, setMinSize] = useState(config.min_trade_size_usd || 100000)
   const [dirFilter, setDirFilter] = useState(config.direction_filter || 'all')
-  const [selectedCoins, setSelectedCoins] = useState(new Set(config.coins || []))
+  const [selectedCoins, setSelectedCoins] = useState(new Set(config.coins?.length ? config.coins : DEFAULT_COINS))
   const [tgToken, setTgToken] = useState(config.telegram_bot_token || '')
   const [tgChat, setTgChat] = useState(config.telegram_chat_id || '')
   const [tgEnabled, setTgEnabled] = useState(config.telegram_enabled || false)
+  const [watchedWallets, setWatchedWallets] = useState(config.watched_wallets || [])
+  const [walletInput, setWalletInput] = useState('')
   const [tokenSearch, setTokenSearch] = useState('')
   const [saveNote, setSaveNote] = useState(false)
+
+  const atLimit = selectedCoins.size >= MAX_TRACKED_COINS
 
   const filteredCoins = useMemo(() => {
     const q = tokenSearch.trim().toUpperCase()
     if (!q) return availableCoins
-    return availableCoins.filter(c => c.includes(q))
+    return availableCoins.filter(c => c.toUpperCase().includes(q))
   }, [availableCoins, tokenSearch])
 
   function toggleCoin(coin) {
     setSelectedCoins(prev => {
       const next = new Set(prev)
-      if (next.has(coin)) next.delete(coin)
-      else next.add(coin)
+      if (next.has(coin)) {
+        next.delete(coin)
+      } else {
+        if (next.size >= MAX_TRACKED_COINS) return prev
+        next.add(coin)
+      }
       return next
     })
   }
 
+  function addWallet() {
+    const addr = walletInput.trim()
+    if (addr && !watchedWallets.includes(addr)) {
+      setWatchedWallets(prev => [...prev, addr])
+    }
+    setWalletInput('')
+  }
+
+  function removeWallet(addr) {
+    setWatchedWallets(prev => prev.filter(w => w !== addr))
+  }
+
   function handleSave() {
+    const coins = Array.from(selectedCoins)
+    if (coins.length === 0) {
+      // Force defaults if empty
+      coins.push(...DEFAULT_COINS)
+      setSelectedCoins(new Set(DEFAULT_COINS))
+    }
     const cfg = {
       min_trade_size_usd: parseInt(minSize) || 100000,
-      coins: Array.from(selectedCoins),
+      coins,
       direction_filter: dirFilter,
       telegram_bot_token: tgToken.trim(),
       telegram_chat_id: tgChat.trim(),
       telegram_enabled: tgEnabled,
+      watched_wallets: watchedWallets,
     }
     onSave(cfg)
     setSaveNote(true)
@@ -49,6 +77,10 @@ export default function SettingsPanel({
   function handleTest() {
     handleSave()
     setTimeout(() => onTestTelegram(), 300)
+  }
+
+  function resetDefaults() {
+    setSelectedCoins(new Set(DEFAULT_COINS))
   }
 
   const selectedArr = Array.from(selectedCoins)
@@ -95,25 +127,21 @@ export default function SettingsPanel({
           </div>
 
           {/* Token Picker */}
-          <div className="section-title">Tokens to Track</div>
+          <div className="section-title">
+            Tokens to Track
+            <span style={{ float: 'right', fontSize: '11px', fontWeight: 400, color: atLimit ? 'var(--red)' : 'var(--text3)' }}>
+              {selectedCoins.size}/{MAX_TRACKED_COINS}
+            </span>
+          </div>
 
           <div className="token-picker">
             <div className="selected-tokens">
-              {selectedArr.length === 0 ? (
-                <span className="all-tag">ALL COINS</span>
-              ) : (
-                <>
-                  {selectedArr.slice(0, 15).map(coin => (
-                    <span key={coin} className="selected-token">
-                      {coin}
-                      <span className="remove" onClick={() => toggleCoin(coin)}>&times;</span>
-                    </span>
-                  ))}
-                  {selectedArr.length > 15 && (
-                    <span className="all-tag">+{selectedArr.length - 15} more</span>
-                  )}
-                </>
-              )}
+              {selectedArr.map(coin => (
+                <span key={coin} className="selected-token">
+                  {coin}
+                  <span className="remove" onClick={() => toggleCoin(coin)}>&times;</span>
+                </span>
+              ))}
             </div>
             <div className="token-picker-header">
               <input
@@ -124,7 +152,7 @@ export default function SettingsPanel({
                 onChange={e => setTokenSearch(e.target.value)}
               />
               <div className="token-actions">
-                <button className="btn btn-sm" onClick={() => setSelectedCoins(new Set())}>All</button>
+                <button className="btn btn-sm" onClick={resetDefaults}>Defaults</button>
                 <button className="btn btn-sm" onClick={() => setSelectedCoins(new Set())}>Clear</button>
               </div>
             </div>
@@ -132,15 +160,52 @@ export default function SettingsPanel({
               {filteredCoins.map(coin => (
                 <div
                   key={coin}
-                  className={`token-item${selectedCoins.has(coin) ? ' selected' : ''}`}
+                  className={
+                    `token-item${selectedCoins.has(coin) ? ' selected' : ''}` +
+                    (atLimit && !selectedCoins.has(coin) ? ' disabled' : '')
+                  }
                   onClick={() => toggleCoin(coin)}
                 >
                   {coin}
                 </div>
               ))}
             </div>
-            <div className="hint">Click tokens to select. Empty selection = track all coins.</div>
+            <div className="hint">
+              Max {MAX_TRACKED_COINS} tokens. {atLimit && <b style={{ color: 'var(--yellow)' }}>Limit reached - remove one to add another.</b>}
+            </div>
           </div>
+
+          {/* Wallet Watchlist */}
+          <div className="section-title">Wallet Watchlist</div>
+
+          <div className="field">
+            <label>Watch specific wallets (Telegram alerts)</label>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <input
+                type="text"
+                value={walletInput}
+                onChange={e => setWalletInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && addWallet()}
+                placeholder="0x... wallet address"
+                style={{ flex: 1 }}
+              />
+              <button className="btn btn-sm" onClick={addWallet}>Add</button>
+            </div>
+            <div className="hint">
+              Only trades involving these wallets trigger Telegram alerts. Empty = all wallets.
+            </div>
+          </div>
+
+          {watchedWallets.length > 0 && (
+            <div className="selected-tokens">
+              {watchedWallets.map(addr => (
+                <span key={addr} className="selected-token" style={{ fontSize: '11px' }}>
+                  {addr.slice(0, 6)}...{addr.slice(-4)}
+                  <span className="remove" onClick={() => removeWallet(addr)}>&times;</span>
+                </span>
+              ))}
+            </div>
+          )}
 
           {/* Telegram */}
           <div className="section-title">Telegram Notifications</div>

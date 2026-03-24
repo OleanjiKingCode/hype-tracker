@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import TradeRow from './components/TradeRow'
 import SettingsPanel from './components/SettingsPanel'
+import MarketIntel from './components/MarketIntel'
 import {
   fmtUsd, playBeep, resumeAudio, loadConfig, saveConfig,
-  fetchAllCoins, sendTelegram, HL_WS_URL,
+  fetchAllCoins, sendTelegram, HL_WS_URL, DEFAULT_COINS,
 } from './utils'
 
 const MAX_TRADES = 500
@@ -17,17 +18,21 @@ export default function App() {
   })
   const [connected, setConnected] = useState(false)
   const [config, setConfig] = useState(loadConfig)
-  const [availableCoins, setAvailableCoins] = useState([])
+  const [availableCoins, setAvailableCoins] = useState([])  // display names for settings picker
+  const [spotMap, setSpotMap] = useState({})                // wsName -> displayName, e.g. "@1" -> "PURR/USDC"
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [soundOn, setSoundOn] = useState(false)
   const [localMinSize, setLocalMinSize] = useState(100000)
   const [localSideFilter, setLocalSideFilter] = useState('all')
+  const [walletFilter, setWalletFilter] = useState('')
+  const [intelExpanded, setIntelExpanded] = useState(true)
 
   const wsRef = useRef(null)
   const configRef = useRef(config)
   const statsRef = useRef(stats)
   const tradesRef = useRef(trades)
   const soundRef = useRef(soundOn)
+  const spotMapRef = useRef(spotMap)
 
   // Track coins key to trigger WS reconnect when coins change
   const coinsKey = (config.coins || []).sort().join(',')
@@ -37,15 +42,26 @@ export default function App() {
   useEffect(() => { statsRef.current = stats }, [stats])
   useEffect(() => { tradesRef.current = trades }, [trades])
   useEffect(() => { soundRef.current = soundOn }, [soundOn])
+  useEffect(() => { spotMapRef.current = spotMap }, [spotMap])
 
   // Fetch available coins on mount
   useEffect(() => {
-    fetchAllCoins().then(setAvailableCoins).catch(() => {})
+    fetchAllCoins().then(({ perpCoins, spotCoins }) => {
+      // Build spot wsName -> displayName map
+      const map = {}
+      spotCoins.forEach(s => { map[s.wsName] = s.displayName })
+      setSpotMap(map)
+      // Combine for settings picker: perps + spot display names
+      const allNames = [...perpCoins, ...spotCoins.map(s => s.displayName)]
+      setAvailableCoins(allNames)
+    }).catch(() => {})
   }, [])
 
   // Process a single trade from WS
   const processTrade = useCallback((t) => {
-    const coin = t.coin || '???'
+    const rawCoin = t.coin || '???'
+    // Resolve spot @index names to display names (e.g. "@1" -> "PURR/USDC")
+    const coin = rawCoin.startsWith('@') ? (spotMapRef.current[rawCoin] || rawCoin) : rawCoin
     const price = parseFloat(t.px || 0)
     const qty = parseFloat(t.sz || 0)
     const side = t.side || '?'
@@ -59,14 +75,10 @@ export default function App() {
     if (dirFilter === 'long' && side !== 'B') return
     if (dirFilter === 'short' && side === 'B') return
 
-    // Coin filter — if specific coins selected, ignore others
-    const trackedCoins = cfg.coins || []
-    if (trackedCoins.length > 0 && !trackedCoins.includes(coin)) return
-
     const timestamp = t.time || 0
     const timeStr = timestamp
-      ? new Date(timestamp).toISOString().slice(11, 19)
-      : new Date().toISOString().slice(11, 19)
+      ? new Date(timestamp).toLocaleTimeString([], { hour12: false })
+      : new Date().toLocaleTimeString([], { hour12: false })
 
     const users = t.users || []
     const trade = {
@@ -110,7 +122,14 @@ export default function App() {
 
     // Telegram (fire and forget)
     if (cfg.telegram_enabled && cfg.telegram_bot_token && cfg.telegram_chat_id) {
-      sendTelegram(trade, cfg).catch(() => {})
+      const watchedWallets = (cfg.watched_wallets || []).map(w => w.toLowerCase())
+      const takerLower = trade.taker.toLowerCase()
+      const makerLower = trade.maker.toLowerCase()
+      const walletMatch = watchedWallets.length === 0 ||
+        watchedWallets.some(w => takerLower.includes(w) || makerLower.includes(w))
+      if (walletMatch) {
+        sendTelegram(trade, cfg).catch(() => {})
+      }
     }
   }, [])
 
@@ -124,15 +143,20 @@ export default function App() {
     async function connect() {
       if (destroyed) return
 
-      // Determine which coins to subscribe to
+      // Determine which coins to subscribe to (max 10)
+      let wsCoins = []
       const cfg = configRef.current
-      let coins = cfg.coins && cfg.coins.length > 0 ? cfg.coins : null
-      if (!coins) {
-        try {
-          coins = await fetchAllCoins()
-        } catch {
-          coins = ['BTC', 'ETH', 'SOL']
-        }
+      const userCoins = cfg.coins && cfg.coins.length > 0 ? cfg.coins : DEFAULT_COINS
+
+      try {
+        const { spotCoins } = await fetchAllCoins()
+        // Build reverse map: displayName -> wsName for spot
+        const reverseSpot = {}
+        spotCoins.forEach(s => { reverseSpot[s.displayName] = s.wsName })
+        // Resolve spot display names to ws names
+        wsCoins = userCoins.map(c => reverseSpot[c] || c)
+      } catch {
+        wsCoins = userCoins
       }
 
       if (destroyed) return
@@ -150,7 +174,7 @@ export default function App() {
           let i = 0
           function sendBatch() {
             if (destroyed || ws.readyState !== WebSocket.OPEN) return
-            const batch = coins.slice(i, i + batchSize)
+            const batch = wsCoins.slice(i, i + batchSize)
             batch.forEach(coin => {
               ws.send(JSON.stringify({
                 method: 'subscribe',
@@ -158,7 +182,7 @@ export default function App() {
               }))
             })
             i += batchSize
-            if (i < coins.length) setTimeout(sendBatch, 200)
+            if (i < wsCoins.length) setTimeout(sendBatch, 200)
           }
           sendBatch()
         }
@@ -219,7 +243,7 @@ export default function App() {
       taker: '0x1234567890abcdef1234567890abcdef12345678',
       maker: '0xabcdef1234567890abcdef1234567890abcdef12',
       time: 0,
-      time_str: new Date().toISOString().slice(11, 19),
+      time_str: new Date().toLocaleTimeString([], { hour12: false }),
     }
     sendTelegram(testTrade, configRef.current).catch(() => {})
   }
@@ -231,10 +255,16 @@ export default function App() {
   }
 
   // Compute filtered trades for display
+  const walletQuery = walletFilter.trim().toLowerCase()
   const visibleTrades = trades.filter(t => {
     if (localSideFilter === 'long' && t.side !== 'B') return false
     if (localSideFilter === 'short' && t.side === 'B') return false
     if (t.size_usd < localMinSize) return false
+    if (walletQuery) {
+      const taker = (t.taker || '').toLowerCase()
+      const maker = (t.maker || '').toLowerCase()
+      if (!taker.includes(walletQuery) && !maker.includes(walletQuery)) return false
+    }
     return true
   })
 
@@ -244,7 +274,7 @@ export default function App() {
   const shortPct = totalVol > 0 ? 100 - longPct : 0
 
   // Active coins display
-  const activeCoins = config.coins && config.coins.length > 0 ? config.coins : null
+  const activeCoins = config.coins && config.coins.length > 0 ? config.coins : DEFAULT_COINS
 
   return (
     <div className="app">
@@ -254,7 +284,7 @@ export default function App() {
           <div className="logo-icon">W</div>
           <div>
             <h1>WHALE TRACKER</h1>
-            <span>Hyperliquid Perpetuals</span>
+            <span>Hyperliquid Perps + Spot</span>
           </div>
         </div>
         <div className="topbar-right">
@@ -332,22 +362,32 @@ export default function App() {
           ))}
         </div>
         <div className="filter-divider" />
+        <span className="filter-label">Wallet</span>
+        <input
+          type="text"
+          className="wallet-filter-input"
+          placeholder="Filter by wallet address..."
+          value={walletFilter}
+          onChange={e => setWalletFilter(e.target.value)}
+        />
+        <div className="filter-divider" />
         <span className="filter-label">Tracking</span>
         <div className="active-coins-bar">
-          {!activeCoins ? (
-            <span className="coin-tag-all">ALL COINS</span>
-          ) : (
-            <>
-              {activeCoins.slice(0, 8).map(c => (
-                <span key={c} className="coin-tag">{c}</span>
-              ))}
-              {activeCoins.length > 8 && (
-                <span className="coin-tag-all">+{activeCoins.length - 8}</span>
-              )}
-            </>
+          {activeCoins.slice(0, 8).map(c => (
+            <span key={c} className="coin-tag">{c}</span>
+          ))}
+          {activeCoins.length > 8 && (
+            <span className="coin-tag-all">+{activeCoins.length - 8}</span>
           )}
         </div>
       </div>
+
+      {/* Market Intelligence */}
+      <MarketIntel
+        trades={trades}
+        expanded={intelExpanded}
+        onToggle={() => setIntelExpanded(e => !e)}
+      />
 
       {/* Trade Feed */}
       <div className="feed-container">
