@@ -3,6 +3,7 @@ import { fmtUsd, truncAddr, isZeroHash, HL_EXPLORER } from '../utils'
 export default function TradeRow({ trade, animate }) {
   const isLong = trade.side === 'B'
   const isWhale = trade.size_usd >= 1_000_000
+  const isSpot = trade.coin.includes('/')
   const hash = trade.hash || ''
   const ta = trade.taker || ''
   const ma = trade.maker || ''
@@ -16,11 +17,15 @@ export default function TradeRow({ trade, animate }) {
       <div className="trade-time mono">{trade.time_str || ''}</div>
       <div className="trade-coin">
         {trade.coin}
+        {isSpot && <span className="spot-badge">SPOT</span>}
         {isWhale && <span className="whale-badge">WHALE</span>}
       </div>
       <div>
         <span className={`trade-side ${isLong ? 'long' : 'short'}`}>
-          {isLong ? '\u25B2 LONG' : '\u25BC SHORT'}
+          {isSpot
+            ? (isLong ? '\u25B2 BUY' : '\u25BC SELL')
+            : (isLong ? '\u25B2 LONG' : '\u25BC SHORT')
+          }
         </span>
       </div>
       <div className={`trade-size ${isLong ? 'long' : 'short'} mono`}>

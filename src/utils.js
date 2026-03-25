@@ -1,11 +1,15 @@
 export const HL_WS_URL = 'wss://api.hyperliquid.xyz/ws'
 export const HL_INFO_URL = 'https://api.hyperliquid.xyz/info'
 export const HL_EXPLORER = 'https://app.hyperliquid.xyz/explorer'
-export const MAX_TRACKED_COINS = 20
+export const MAX_TRACKED_COINS = 30
 export const DEFAULT_COINS = [
+  // Perps
   'BTC', 'ETH', 'SOL', 'HYPE', 'XRP', 'SUI', 'DOGE', 'LINK',
   'ONDO', 'ARB', 'PAXG', 'OP', 'AVAX', 'NEAR', 'APT', 'INJ',
   'TIA', 'SEI', 'RENDER', 'kPEPE',
+  // Spot pairs (tracks buys/accumulation)
+  'HYPE/USDC', 'BTC/USDC', 'ETH/USDC', 'SOL/USDC', 'PURR/USDC',
+  'GLD/USDC', 'SUI/USDC', 'XRP/USDC', 'LINK/USDC', 'DOGE/USDC',
 ]
 
 export function fmtUsd(v) {

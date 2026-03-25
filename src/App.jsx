@@ -143,7 +143,7 @@ export default function App() {
     async function connect() {
       if (destroyed) return
 
-      // Determine which coins to subscribe to (max 10)
+      // Determine which coins to subscribe to (perps + spot pairs)
       let wsCoins = []
       const cfg = configRef.current
       const userCoins = cfg.coins && cfg.coins.length > 0 ? cfg.coins : DEFAULT_COINS

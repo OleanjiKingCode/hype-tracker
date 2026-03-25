@@ -322,6 +322,12 @@ body{
   background:linear-gradient(135deg,rgba(251,191,36,.15),rgba(251,191,36,.05));
   color:var(--yellow);border:1px solid rgba(251,191,36,.2);
 }
+.spot-badge{
+  display:inline-block;padding:2px 8px;border-radius:4px;
+  font-size:9px;font-weight:800;margin-left:6px;letter-spacing:1px;
+  background:rgba(56,189,248,.1);color:#38bdf8;
+  border:1px solid rgba(56,189,248,.2);
+}
 
 /* Empty state */
 .empty-state{
