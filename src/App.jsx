@@ -8,14 +8,30 @@ import {
 } from './utils'
 
 const MAX_TRADES = 500
+const TRADES_STORAGE_KEY = 'hype-tracker-trades'
+const STATS_STORAGE_KEY = 'hype-tracker-stats'
 const SIZE_OPTIONS = [50000, 100000, 250000, 500000, 1000000]
 const SIZE_LABELS = ['$50K', '$100K', '$250K', '$500K', '$1M']
 
+function loadPersistedTrades() {
+  try {
+    const raw = localStorage.getItem(TRADES_STORAGE_KEY)
+    if (raw) return JSON.parse(raw)
+  } catch { /* ignore */ }
+  return []
+}
+
+function loadPersistedStats() {
+  try {
+    const raw = localStorage.getItem(STATS_STORAGE_KEY)
+    if (raw) return JSON.parse(raw)
+  } catch { /* ignore */ }
+  return { total_trades: 0, total_volume: 0, long_volume: 0, short_volume: 0 }
+}
+
 export default function App() {
-  const [trades, setTrades] = useState([])
-  const [stats, setStats] = useState({
-    total_trades: 0, total_volume: 0, long_volume: 0, short_volume: 0,
-  })
+  const [trades, setTrades] = useState(loadPersistedTrades)
+  const [stats, setStats] = useState(loadPersistedStats)
   const [connected, setConnected] = useState(false)
   const [config, setConfig] = useState(loadConfig)
   const [availableCoins, setAvailableCoins] = useState([])  // display names for settings picker
@@ -43,6 +59,21 @@ export default function App() {
   useEffect(() => { tradesRef.current = trades }, [trades])
   useEffect(() => { soundRef.current = soundOn }, [soundOn])
   useEffect(() => { spotMapRef.current = spotMap }, [spotMap])
+
+  // Persist trades + stats to localStorage (debounced)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try { localStorage.setItem(TRADES_STORAGE_KEY, JSON.stringify(trades)) } catch { /* full */ }
+    }, 2000)
+    return () => clearTimeout(timer)
+  }, [trades])
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try { localStorage.setItem(STATS_STORAGE_KEY, JSON.stringify(stats)) } catch { /* full */ }
+    }, 2000)
+    return () => clearTimeout(timer)
+  }, [stats])
 
   // Fetch available coins on mount
   useEffect(() => {
