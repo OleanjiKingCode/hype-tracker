@@ -1,71 +1,74 @@
-import { useState, useMemo } from 'react'
-import { fmtUsd, truncAddr, HL_EXPLORER } from '../utils'
+import { useState, useMemo } from "react";
+import { fmtUsd, truncAddr, HL_EXPLORER } from "../utils";
 
 const TIME_WINDOWS = [
-  { label: '1H', ms: 60 * 60 * 1000 },
-  { label: '4H', ms: 4 * 60 * 60 * 1000 },
-  { label: '12H', ms: 12 * 60 * 60 * 1000 },
-  { label: '24H', ms: 24 * 60 * 60 * 1000 },
-]
+  { label: "1H", ms: 60 * 60 * 1000 },
+  { label: "4H", ms: 4 * 60 * 60 * 1000 },
+  { label: "12H", ms: 12 * 60 * 60 * 1000 },
+  { label: "24H", ms: 24 * 60 * 60 * 1000 },
+];
 
-const CONTRARIAN_RATIO = 0.75
-const CONTRARIAN_MIN_USD = 250_000
+const CONTRARIAN_RATIO = 0.75;
+const CONTRARIAN_MIN_USD = 250_000;
 
 export default function MarketIntel({ trades, expanded, onToggle }) {
-  const [windowIdx, setWindowIdx] = useState(0)
-  const [expandedWallets, setExpandedWallets] = useState(new Set())
-  const windowMs = TIME_WINDOWS[windowIdx].ms
+  const [windowIdx, setWindowIdx] = useState(0);
+  const [expandedWallets, setExpandedWallets] = useState(new Set());
+  const windowMs = TIME_WINDOWS[windowIdx].ms;
 
   function toggleWallet(key) {
-    setExpandedWallets(prev => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
+    setExpandedWallets((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   }
 
   const analysis = useMemo(() => {
-    const now = Date.now()
-    const cutoff = now - windowMs
-    const recent = trades.filter(t => t.time >= cutoff)
+    const now = Date.now();
+    const cutoff = now - windowMs;
+    const recent = trades.filter((t) => t.time >= cutoff);
 
     // Per-coin aggregation
-    const coins = {}
+    const coins = {};
     for (const t of recent) {
       if (!coins[t.coin]) {
-        coins[t.coin] = { longVol: 0, shortVol: 0, count: 0, trades: [] }
+        coins[t.coin] = { longVol: 0, shortVol: 0, count: 0, trades: [] };
       }
-      const c = coins[t.coin]
-      c.count++
-      if (t.side === 'B') c.longVol += t.size_usd
-      else c.shortVol += t.size_usd
-      c.trades.push(t)
+      const c = coins[t.coin];
+      c.count++;
+      if (t.side === "B") c.longVol += t.size_usd;
+      else c.shortVol += t.size_usd;
+      c.trades.push(t);
     }
 
     // Build sorted summary
-    const summary = Object.entries(coins).map(([coin, data]) => {
-      const total = data.longVol + data.shortVol
-      const longPct = total > 0 ? data.longVol / total : 0.5
-      const dominant = longPct >= 0.5 ? 'long' : 'short'
-      return { coin, ...data, total, longPct, dominant }
-    }).sort((a, b) => b.total - a.total)
+    const summary = Object.entries(coins)
+      .map(([coin, data]) => {
+        const total = data.longVol + data.shortVol;
+        const longPct = total > 0 ? data.longVol / total : 0.5;
+        const dominant = longPct >= 0.5 ? "long" : "short";
+        return { coin, ...data, total, longPct, dominant };
+      })
+      .sort((a, b) => b.total - a.total);
 
     // Detect contrarian trades and group by wallet
-    const walletGroups = {}
+    const walletGroups = {};
     for (const s of summary) {
-      const { longPct, trades: coinTrades, coin } = s
-      if (longPct >= CONTRARIAN_RATIO || longPct <= (1 - CONTRARIAN_RATIO)) {
-        const dominantDir = longPct >= CONTRARIAN_RATIO ? 'B' : 'A'
-        const majorityPct = dominantDir === 'B'
-          ? Math.round(longPct * 100)
-          : Math.round((1 - longPct) * 100)
-        const majorityLabel = dominantDir === 'B' ? 'longed' : 'shorted'
+      const { longPct, trades: coinTrades, coin } = s;
+      if (longPct >= CONTRARIAN_RATIO || longPct <= 1 - CONTRARIAN_RATIO) {
+        const dominantDir = longPct >= CONTRARIAN_RATIO ? "B" : "A";
+        const majorityPct =
+          dominantDir === "B"
+            ? Math.round(longPct * 100)
+            : Math.round((1 - longPct) * 100);
+        const majorityLabel = dominantDir === "B" ? "longed" : "shorted";
 
         for (const t of coinTrades) {
           if (t.side !== dominantDir && t.size_usd >= CONTRARIAN_MIN_USD) {
-            const wallet = t.taker || 'unknown'
-            const key = `${wallet}-${coin}-${t.side}`
+            const wallet = t.taker || "unknown";
+            const key = `${wallet}-${coin}-${t.side}`;
             if (!walletGroups[key]) {
               walletGroups[key] = {
                 wallet,
@@ -76,26 +79,27 @@ export default function MarketIntel({ trades, expanded, onToggle }) {
                 trades: [],
                 majorityPct,
                 majorityLabel,
-              }
+              };
             }
-            const g = walletGroups[key]
-            g.totalUsd += t.size_usd
-            g.tradeCount++
-            g.trades.push(t)
+            const g = walletGroups[key];
+            g.totalUsd += t.size_usd;
+            g.tradeCount++;
+            g.trades.push(t);
           }
         }
       }
     }
 
-    const walletAlerts = Object.values(walletGroups)
-      .sort((a, b) => b.totalUsd - a.totalUsd)
+    const walletAlerts = Object.values(walletGroups).sort(
+      (a, b) => b.totalUsd - a.totalUsd,
+    );
 
-    return { summary, walletAlerts, totalTrades: recent.length }
-  }, [trades, windowMs])
+    return { summary, walletAlerts, totalTrades: recent.length };
+  }, [trades, windowMs]);
 
-  if (trades.length === 0) return null
+  if (trades.length === 0) return null;
 
-  const alertCount = analysis.walletAlerts.length
+  const alertCount = analysis.walletAlerts.length;
 
   return (
     <div className="intel-panel">
@@ -108,18 +112,23 @@ export default function MarketIntel({ trades, expanded, onToggle }) {
           )}
         </div>
         <div className="intel-header-right">
-          <div className="intel-window-btns" onClick={e => e.stopPropagation()}>
+          <div
+            className="intel-window-btns"
+            onClick={(e) => e.stopPropagation()}
+          >
             {TIME_WINDOWS.map((w, i) => (
               <button
                 key={w.label}
-                className={`intel-window-btn${windowIdx === i ? ' active' : ''}`}
+                className={`intel-window-btn${windowIdx === i ? " active" : ""}`}
                 onClick={() => setWindowIdx(i)}
               >
                 {w.label}
               </button>
             ))}
           </div>
-          <span className="intel-chevron">{expanded ? '\u25B2' : '\u25BC'}</span>
+          <span className="intel-chevron">
+            {expanded ? "\u25B2" : "\u25BC"}
+          </span>
         </div>
       </div>
 
@@ -128,14 +137,16 @@ export default function MarketIntel({ trades, expanded, onToggle }) {
           {/* Contrarian Wallet Alerts */}
           {alertCount > 0 && (
             <div className="intel-section">
-              <div className="intel-section-title">&#9888; Contrarian Activity (Against the Flow)</div>
+              <div className="intel-section-title">
+                &#9888; Contrarian Activity (Against the Flow)
+              </div>
               <div className="intel-alerts">
                 {analysis.walletAlerts.slice(0, 8).map((g, i) => {
-                  const sideLabel = g.side === 'B' ? 'LONG' : 'SHORT'
-                  const sideClass = g.side === 'B' ? 'long' : 'short'
-                  const key = `${g.wallet}-${g.coin}-${g.side}`
-                  const isExpanded = expandedWallets.has(key)
-                  const isSameWallet = g.tradeCount > 1
+                  const sideLabel = g.side === "B" ? "LONG" : "SHORT";
+                  const sideClass = g.side === "B" ? "long" : "short";
+                  const key = `${g.wallet}-${g.coin}-${g.side}`;
+                  const isExpanded = expandedWallets.has(key);
+                  const isSameWallet = g.tradeCount > 1;
 
                   return (
                     <div key={i} className="intel-wallet-alert">
@@ -149,16 +160,16 @@ export default function MarketIntel({ trades, expanded, onToggle }) {
                             target="_blank"
                             rel="noreferrer"
                             className="intel-wallet-addr"
-                            onClick={e => e.stopPropagation()}
+                            onClick={(e) => e.stopPropagation()}
                           >
                             {truncAddr(g.wallet)}
                           </a>
                           <span className="intel-alert-text">
-                            {' did '}
+                            {" did "}
                             <span className={`intel-alert-size ${sideClass}`}>
                               {fmtUsd(g.totalUsd)} {sideLabel}
                             </span>
-                            {' on '}
+                            {" on "}
                             <b>{g.coin}</b>
                             {isSameWallet && ` in ${g.tradeCount} trades`}
                           </span>
@@ -168,7 +179,9 @@ export default function MarketIntel({ trades, expanded, onToggle }) {
                         </div>
                         {isSameWallet && (
                           <span className="intel-expand-btn">
-                            {isExpanded ? '\u25B2 hide' : `\u25BC ${g.tradeCount} trades`}
+                            {isExpanded
+                              ? "\u25B2 hide"
+                              : `\u25BC ${g.tradeCount} trades`}
                           </span>
                         )}
                       </div>
@@ -178,17 +191,28 @@ export default function MarketIntel({ trades, expanded, onToggle }) {
                         <div className="intel-trade-details">
                           {g.trades.map((t, j) => (
                             <div key={j} className="intel-trade-detail-row">
-                              <span className="intel-detail-time">{t.time_str}</span>
-                              <span className={`intel-detail-size ${sideClass}`}>
+                              <span className="intel-detail-time">
+                                {t.time_str}
+                              </span>
+                              <span
+                                className={`intel-detail-size ${sideClass}`}
+                              >
                                 {fmtUsd(t.size_usd)}
                               </span>
                               <span className="intel-detail-price">
-                                @ ${Number(t.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                @ $
+                                {Number(t.price).toLocaleString(undefined, {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                })}
                               </span>
                               <span className="intel-detail-qty">
-                                {Number(t.qty).toLocaleString(undefined, { maximumFractionDigits: 4 })} {t.coin}
+                                {Number(t.qty).toLocaleString(undefined, {
+                                  maximumFractionDigits: 4,
+                                })}{" "}
+                                {t.coin}
                               </span>
-                              {t.hash && t.hash !== '0x' + '0'.repeat(64) && (
+                              {t.hash && t.hash !== "0x" + "0".repeat(64) && (
                                 <a
                                   href={`${HL_EXPLORER}/tx/${t.hash}`}
                                   target="_blank"
@@ -203,7 +227,7 @@ export default function MarketIntel({ trades, expanded, onToggle }) {
                         </div>
                       )}
                     </div>
-                  )
+                  );
                 })}
               </div>
             </div>
@@ -212,22 +236,29 @@ export default function MarketIntel({ trades, expanded, onToggle }) {
           {/* Per-coin Summary */}
           <div className="intel-section">
             <div className="intel-section-title">
-              Volume by Coin ({TIME_WINDOWS[windowIdx].label} window, {analysis.totalTrades} trades)
+              Volume by Coin ({TIME_WINDOWS[windowIdx].label} window,{" "}
+              {analysis.totalTrades} trades)
             </div>
             <div className="intel-coins">
               {analysis.summary.length === 0 ? (
                 <div className="intel-empty">No trades in this window yet</div>
               ) : (
-                analysis.summary.map(s => {
-                  const longW = Math.round(s.longPct * 100)
-                  const shortW = 100 - longW
+                analysis.summary.map((s) => {
+                  const longW = Math.round(s.longPct * 100);
+                  const shortW = 100 - longW;
                   return (
                     <div key={s.coin} className="intel-coin-row">
                       <div className="intel-coin-name">{s.coin}</div>
                       <div className="intel-coin-vol">{fmtUsd(s.total)}</div>
                       <div className="intel-coin-bar">
-                        <div className="intel-bar-fill long" style={{ width: `${longW}%` }} />
-                        <div className="intel-bar-fill short" style={{ width: `${shortW}%` }} />
+                        <div
+                          className="intel-bar-fill long"
+                          style={{ width: `${longW}%` }}
+                        />
+                        <div
+                          className="intel-bar-fill short"
+                          style={{ width: `${shortW}%` }}
+                        />
                       </div>
                       <div className="intel-coin-pcts">
                         <span className="green">{longW}%L</span>
@@ -235,7 +266,7 @@ export default function MarketIntel({ trades, expanded, onToggle }) {
                       </div>
                       <div className="intel-coin-counts">{s.count} trades</div>
                     </div>
-                  )
+                  );
                 })
               )}
             </div>
@@ -243,5 +274,5 @@ export default function MarketIntel({ trades, expanded, onToggle }) {
         </div>
       )}
     </div>
-  )
+  );
 }
