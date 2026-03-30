@@ -14,6 +14,7 @@ export default function SettingsPanel({
   const [selectedCoins, setSelectedCoins] = useState(new Set(config.coins?.length ? config.coins : DEFAULT_COINS))
   const [tgToken, setTgToken] = useState(config.telegram_bot_token || '')
   const [tgChat, setTgChat] = useState(config.telegram_chat_id || '')
+  const [tgAlertChat, setTgAlertChat] = useState(config.telegram_alert_chat_id || '')
   const [tgEnabled, setTgEnabled] = useState(config.telegram_enabled || false)
   const [watchedWallets, setWatchedWallets] = useState(config.watched_wallets || [])
   const [walletInput, setWalletInput] = useState('')
@@ -66,6 +67,7 @@ export default function SettingsPanel({
       direction_filter: dirFilter,
       telegram_bot_token: tgToken.trim(),
       telegram_chat_id: tgChat.trim(),
+      telegram_alert_chat_id: tgAlertChat.trim(),
       telegram_enabled: tgEnabled,
       watched_wallets: watchedWallets,
     }
@@ -222,7 +224,7 @@ export default function SettingsPanel({
           </div>
 
           <div className="field">
-            <label>Chat ID</label>
+            <label>Chat ID (general trade alerts)</label>
             <input
               type="text"
               value={tgChat}
@@ -230,6 +232,17 @@ export default function SettingsPanel({
               placeholder="123456789"
             />
             <div className="hint">Message <b>@userinfobot</b> on Telegram to get your Chat ID</div>
+          </div>
+
+          <div className="field">
+            <label>Alert Channel Chat ID (whale / contrarian / accumulation)</label>
+            <input
+              type="text"
+              value={tgAlertChat}
+              onChange={e => setTgAlertChat(e.target.value)}
+              placeholder="@your_channel or -1001234567890"
+            />
+            <div className="hint">Dedicated channel for the 3 alert types (BTC, ETH, HYPE, SOL, GOVE). Leave empty to use the general Chat ID above.</div>
           </div>
 
           <div className="toggle-row">

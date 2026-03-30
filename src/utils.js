@@ -63,7 +63,8 @@ export function loadConfig() {
     direction_filter: 'all',
     telegram_bot_token: '',
     telegram_chat_id: '',
-    telegram_enabled: false,
+    telegram_alert_chat_id: '',
+    telegram_enabled: true,
     watched_wallets: [],
   }
 }
@@ -110,11 +111,20 @@ export async function fetchAllCoins() {
   return { perpCoins, spotCoins }
 }
 
-export async function sendTelegram(trade, config) {
+export async function sendTelegram(trade) {
   const resp = await fetch('/api/telegram', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ trade, config }),
+    body: JSON.stringify({ trade }),
+  })
+  return resp.ok
+}
+
+export async function sendAlertTelegram(alert) {
+  const resp = await fetch('/api/telegram-alerts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ alert }),
   })
   return resp.ok
 }

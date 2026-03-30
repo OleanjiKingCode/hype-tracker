@@ -16,14 +16,14 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const { trade, config } = req.body || {}
+  const { trade } = req.body || {}
 
-  if (!trade || !config) {
-    return res.status(400).json({ error: 'Missing trade or config' })
+  if (!trade) {
+    return res.status(400).json({ error: 'Missing trade' })
   }
 
-  const token = (config.telegram_bot_token || '').trim()
-  const chatId = (config.telegram_chat_id || '').trim()
+  const token = process.env.TELEGRAM_BOT_TOKEN || ''
+  const chatId = process.env.TELEGRAM_ALERT_CHAT_ID || process.env.TELEGRAM_CHAT_ID || ''
 
   if (!token || !chatId) {
     return res.status(400).json({ error: 'Missing Telegram credentials' })

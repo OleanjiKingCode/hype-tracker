@@ -4,8 +4,9 @@ import SettingsPanel from './components/SettingsPanel'
 import MarketIntel from './components/MarketIntel'
 import {
   fmtUsd, playBeep, resumeAudio, loadConfig, saveConfig,
-  fetchAllCoins, sendTelegram, HL_WS_URL, DEFAULT_COINS,
+  fetchAllCoins, sendTelegram, sendAlertTelegram, HL_WS_URL, DEFAULT_COINS,
 } from './utils'
+import { checkAlerts } from './alertEngine'
 
 const MAX_TRADES = 500
 const TRADES_STORAGE_KEY = 'hype-tracker-trades'
@@ -152,16 +153,23 @@ export default function App() {
     }
 
     // Telegram (fire and forget)
-    if (cfg.telegram_enabled && cfg.telegram_bot_token && cfg.telegram_chat_id) {
+    if (cfg.telegram_enabled) {
       const watchedWallets = (cfg.watched_wallets || []).map(w => w.toLowerCase())
       const takerLower = trade.taker.toLowerCase()
       const makerLower = trade.maker.toLowerCase()
       const walletMatch = watchedWallets.length === 0 ||
         watchedWallets.some(w => takerLower.includes(w) || makerLower.includes(w))
       if (walletMatch) {
-        sendTelegram(trade, cfg).catch(() => {})
+        sendTelegram(trade).catch(() => {})
       }
     }
+
+    // Dedicated alert system (whale / contrarian / accumulation)
+    checkAlerts(trade, (alert) => {
+      if (cfg.telegram_enabled) {
+        sendAlertTelegram(alert).catch(() => {})
+      }
+    })
   }, [])
 
   // WebSocket connection
@@ -276,7 +284,7 @@ export default function App() {
       time: 0,
       time_str: new Date().toLocaleTimeString([], { hour12: false }),
     }
-    sendTelegram(testTrade, configRef.current).catch(() => {})
+    sendTelegram(testTrade).catch(() => {})
   }
 
   function toggleSound() {
