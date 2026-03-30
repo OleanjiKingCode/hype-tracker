@@ -92,6 +92,15 @@ export function checkAlerts(trade, sendFn) {
         const timeSpanMin = Math.round(
           (walletTrades[walletTrades.length - 1].time - walletTrades[0].time) / 60000
         )
+        // Include individual trade details for the message
+        const trades = walletTrades.map(t => ({
+          size_usd: t.size_usd,
+          price: t.price,
+          qty: t.qty,
+          time_str: t.time_str,
+        }))
+        const avgPrice = walletTrades.reduce((s, t) => s + t.price, 0) / count
+        const totalQty = walletTrades.reduce((s, t) => s + t.qty, 0)
         sendFn({
           type: 'accumulation',
           trade,
@@ -101,6 +110,9 @@ export function checkAlerts(trade, sendFn) {
           timeSpanMin,
           coin: trade.coin,
           side: trade.side,
+          trades,
+          avgPrice,
+          totalQty,
         })
       }
     }

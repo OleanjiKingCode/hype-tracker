@@ -44,15 +44,41 @@ function formatContrarian(alert) {
 
 function formatAccumulation(alert) {
   const side = alert.side === 'B' ? '\uD83D\uDCC8 LONG' : '\uD83D\uDCC9 SHORT'
-  return [
+  const avgPrice = Number(alert.avgPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const totalQty = Number(alert.totalQty).toLocaleString(undefined, { maximumFractionDigits: 4 })
+
+  const lines = [
     `\uD83D\uDD04 <b>ACCUMULATION ALERT</b> \u2014 ${alert.coin}`,
     '',
-    `${side} \u2022 <b>${fmtUsd(alert.cumulative)}</b> total across ${alert.tradeCount} trades`,
-    `\u23F1 Built over ${alert.timeSpanMin} minute${alert.timeSpanMin !== 1 ? 's' : ''}`,
-    `\uD83D\uDC64 Wallet: <a href="${HL_EXPLORER}/address/${alert.wallet}">${truncAddr(alert.wallet)}</a>`,
+    `${side} \u2022 <b>${fmtUsd(alert.cumulative)}</b> total`,
     '',
-    `\uD83D\uDD0D Same wallet quietly building a position\u2026`,
-  ].join('\n')
+    `\uD83D\uDCCA <b>Breakdown:</b>`,
+    `  \u2022 Trades: <b>${alert.tradeCount}</b> entries`,
+    `  \u2022 Avg Price: $${avgPrice}`,
+    `  \u2022 Total Qty: ${totalQty} ${alert.coin}`,
+    `  \u2022 Time Span: ${alert.timeSpanMin} min${alert.timeSpanMin !== 1 ? 's' : ''}`,
+    '',
+  ]
+
+  // Show individual entries (last 8 max)
+  const trades = alert.trades || []
+  if (trades.length > 0) {
+    lines.push(`\uD83D\uDCDD <b>Individual Entries:</b>`)
+    const shown = trades.slice(-8)
+    for (const t of shown) {
+      lines.push(`  ${t.time_str} \u2014 ${fmtUsd(t.size_usd)} @ $${Number(t.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
+    }
+    if (trades.length > 8) {
+      lines.push(`  <i>...and ${trades.length - 8} more</i>`)
+    }
+    lines.push('')
+  }
+
+  lines.push(`\uD83D\uDC64 Wallet: <a href="${HL_EXPLORER}/address/${alert.wallet}">${truncAddr(alert.wallet)}</a>`)
+  lines.push('')
+  lines.push(`\uD83D\uDD0D This wallet is splitting a large position into multiple smaller entries`)
+
+  return lines.join('\n')
 }
 
 const FORMATTERS = {
