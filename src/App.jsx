@@ -152,19 +152,7 @@ export default function App() {
       }
     }
 
-    // Telegram (fire and forget)
-    if (cfg.telegram_enabled) {
-      const watchedWallets = (cfg.watched_wallets || []).map(w => w.toLowerCase())
-      const takerLower = trade.taker.toLowerCase()
-      const makerLower = trade.maker.toLowerCase()
-      const walletMatch = watchedWallets.length === 0 ||
-        watchedWallets.some(w => takerLower.includes(w) || makerLower.includes(w))
-      if (walletMatch) {
-        sendTelegram(trade).catch(() => {})
-      }
-    }
-
-    // Dedicated alert system (whale / contrarian / accumulation)
+    // Dedicated alert system (whale / contrarian / accumulation) — only these 3 go to TG
     checkAlerts(trade, (alert) => {
       if (cfg.telegram_enabled) {
         sendAlertTelegram(alert).catch(() => {})
