@@ -1,7 +1,7 @@
 // Alert Engine — monitors trades for 3 alert types on 5 key coins
 // Fires callbacks when alert conditions are met
 
-const ALERT_COINS = ['BTC', 'ETH', 'HYPE', 'SOL', 'GOVE']
+const ALERT_COINS = ['BTC', 'ETH', 'HYPE', 'SOL', 'PAXG', 'GLD/USDC']
 const WHALE_THRESHOLD = 700_000          // single trade $700K+
 const CONTRARIAN_THRESHOLD = 600_000     // $600K+ against the flow
 const CONTRARIAN_RATIO = 0.75            // 75%+ of volume one direction
