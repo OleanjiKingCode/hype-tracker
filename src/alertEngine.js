@@ -9,6 +9,7 @@ const ACCUMULATION_WINDOW_MS = 30 * 60 * 1000  // 30 min rolling window
 const ACCUMULATION_THRESHOLD = 500_000   // cumulative $ in window
 const ACCUMULATION_MIN_TRADES = 3        // at least 3 separate entries
 const DEDUP_COOLDOWN_MS = 5 * 60 * 1000  // don't repeat same alert within 5 min
+const MIN_MAJOR_TRADE = 50_000           // only track $50K+ trades for major coin alerts
 
 // Heavy/major coins excluded from alt volume detection
 const HEAVY_COINS = [
@@ -60,12 +61,14 @@ function pruneOldData() {
 export function checkAlerts(trade, sendFn) {
   pruneOldData()
 
-  // Store trade in 30 min window (whale/contrarian/accumulation)
-  recentTrades.push(trade)
+  // Store trade in 30 min window (whale/contrarian/accumulation) — only $100K+ for majors
   const wallet = trade.taker || ''
-  if (wallet) {
-    if (!walletHistory[wallet]) walletHistory[wallet] = []
-    walletHistory[wallet].push(trade)
+  if (trade.size_usd >= MIN_MAJOR_TRADE) {
+    recentTrades.push(trade)
+    if (wallet) {
+      if (!walletHistory[wallet]) walletHistory[wallet] = []
+      walletHistory[wallet].push(trade)
+    }
   }
 
   // --- ALERT 4: Alt Volume Spike ($1M+ on small alts in 5 hr window) ---

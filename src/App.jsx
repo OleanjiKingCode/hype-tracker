@@ -99,14 +99,6 @@ export default function App() {
     const side = t.side || '?'
     const sizeUsd = price * qty
 
-    const cfg = configRef.current
-    const minSize = cfg.min_trade_size_usd || 100000
-    if (sizeUsd < minSize) return
-
-    const dirFilter = cfg.direction_filter || 'all'
-    if (dirFilter === 'long' && side !== 'B') return
-    if (dirFilter === 'short' && side === 'B') return
-
     const timestamp = t.time || 0
     const timeStr = timestamp
       ? new Date(timestamp).toLocaleTimeString([], { hour12: false })
@@ -127,7 +119,24 @@ export default function App() {
       time_str: timeStr,
     }
 
-    // Update stats
+    const cfg = configRef.current
+
+    // Alert engine runs on ALL trades (alt volume needs small trades to accumulate to $1M+)
+    checkAlerts(trade, (alert) => {
+      if (cfg.telegram_enabled) {
+        sendAlertTelegram(alert).catch(() => {})
+      }
+    })
+
+    // UI feed filters — only display trades above min size
+    const minSize = cfg.min_trade_size_usd || 100000
+    if (sizeUsd < minSize) return
+
+    const dirFilter = cfg.direction_filter || 'all'
+    if (dirFilter === 'long' && side !== 'B') return
+    if (dirFilter === 'short' && side === 'B') return
+
+    // Update stats (only for displayed trades)
     setStats(prev => ({
       total_trades: prev.total_trades + 1,
       total_volume: prev.total_volume + sizeUsd,
@@ -151,13 +160,6 @@ export default function App() {
         playBeep(660, 0.15)
       }
     }
-
-    // Dedicated alert system (whale / contrarian / accumulation / alt volume) — send to TG
-    checkAlerts(trade, (alert) => {
-      if (cfg.telegram_enabled) {
-        sendAlertTelegram(alert).catch(() => {})
-      }
-    })
   }, [])
 
   // WebSocket connection
