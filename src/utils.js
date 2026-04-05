@@ -1,7 +1,7 @@
 export const HL_WS_URL = 'wss://api.hyperliquid.xyz/ws'
 export const HL_INFO_URL = 'https://api.hyperliquid.xyz/info'
 export const HL_EXPLORER = 'https://app.hyperliquid.xyz/explorer'
-export const MAX_TRACKED_ALTS = 30
+export const MAX_TRACKED_ALTS = 50
 
 // Always subscribed — major coins + spot pairs for whale/contrarian/accumulation alerts
 export const ALWAYS_TRACKED = [
@@ -14,10 +14,18 @@ export const ALWAYS_TRACKED = [
   'GLD/USDC', 'SUI/USDC', 'XRP/USDC', 'LINK/USDC', 'DOGE/USDC',
 ]
 
-// Default small alts to track for alt volume detection
+// Default small alts to track for alt volume detection (~40)
 export const DEFAULT_ALTS = [
-  'kPEPE', 'SEI', 'PURR', 'JEFF', 'MOG', 'CATBAL',
-  'BUDDY', 'FARM', 'RAGE',
+  // Meme / micro-cap
+  'kPEPE', 'kSHIB', 'kBONK', 'kFLOKI', 'kNEIRO', 'kLUNC', 'kDOGS',
+  'WIF', 'PENGU', 'PNUT', 'BRETT', 'POPCAT', 'TURBO', 'MEW',
+  'FARTCOIN', 'BOME', 'MYRO', 'NOT', 'MOODENG', 'TRUMP',
+  // AI / narrative
+  'AI16Z', 'AIXBT', 'GRIFFAIN', 'ZEREBRO', 'VIRTUAL', 'GOAT',
+  // Small-cap / newer listings
+  'SEI', 'PURR', 'SPX', 'ANIME', 'DOOD', 'CHILLGUY',
+  'HPOS', 'MELANIA', 'VINE', 'KAITO', 'LAUNCHCOIN',
+  'BABY', 'JELLY', 'MON', 'HYPER', 'INIT', 'PUMP',
 ]
 
 // Combined for backwards compat
