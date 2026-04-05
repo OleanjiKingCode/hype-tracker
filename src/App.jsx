@@ -290,7 +290,8 @@ export default function App() {
   const visibleTrades = trades.filter(t => {
     if (localSideFilter === 'long' && t.side !== 'B') return false
     if (localSideFilter === 'short' && t.side === 'B') return false
-    if (t.size_usd < localMinSize) return false
+    const tIsAlt = !t.coin.includes('/') && !ALWAYS_SET.has(t.coin)
+    if (!tIsAlt && t.size_usd < localMinSize) return false
     if (walletQuery) {
       const taker = (t.taker || '').toLowerCase()
       const maker = (t.maker || '').toLowerCase()
