@@ -11,6 +11,21 @@ const TIME_WINDOWS = [
 const CONTRARIAN_RATIO = 0.75;
 const CONTRARIAN_MIN_USD = 250_000;
 
+// Must match alertEngine.js HEAVY_COINS
+const HEAVY_COINS = [
+  'BTC', 'ETH', 'SOL', 'HYPE', 'XRP', 'BNB', 'AAVE', 'LINK', 'DOGE',
+  'SUI', 'AVAX', 'ONDO', 'ADA', 'DOT', 'MATIC', 'ARB', 'OP',
+  'NEAR', 'APT', 'UNI', 'LTC', 'BCH', 'ATOM', 'FIL', 'ICP',
+  'RENDER', 'INJ', 'TIA', 'MKR', 'CRV', 'AERO',
+  'PAXG', 'GLD', 'SLV', 'UST',
+];
+const ALT_VOLUME_THRESHOLD = 1_000_000;
+const ALT_WINDOW_MS = 5 * 60 * 60 * 1000; // 5 hours
+
+function isSmallAlt(coin) {
+  return !coin.includes('/') && !HEAVY_COINS.includes(coin);
+}
+
 export default function MarketIntel({ trades, expanded, onToggle }) {
   const [windowIdx, setWindowIdx] = useState(0);
   const [expandedWallets, setExpandedWallets] = useState(new Set());
@@ -94,12 +109,36 @@ export default function MarketIntel({ trades, expanded, onToggle }) {
       (a, b) => b.totalUsd - a.totalUsd,
     );
 
-    return { summary, walletAlerts, totalTrades: recent.length };
+    // Alt volume spikes (5 hr window, independent of selected time window)
+    const altCutoff = now - ALT_WINDOW_MS;
+    const altTrades = trades.filter((t) => t.time >= altCutoff && isSmallAlt(t.coin));
+    const altCoins = {};
+    for (const t of altTrades) {
+      if (!altCoins[t.coin]) {
+        altCoins[t.coin] = { longVol: 0, shortVol: 0, count: 0, biggest: t };
+      }
+      const c = altCoins[t.coin];
+      c.count++;
+      if (t.side === "B") c.longVol += t.size_usd;
+      else c.shortVol += t.size_usd;
+      if (t.size_usd > c.biggest.size_usd) c.biggest = t;
+    }
+    const altSpikes = Object.entries(altCoins)
+      .map(([coin, data]) => {
+        const total = data.longVol + data.shortVol;
+        const longPct = total > 0 ? Math.round((data.longVol / total) * 100) : 50;
+        return { coin, ...data, total, longPct };
+      })
+      .filter((s) => s.total >= ALT_VOLUME_THRESHOLD)
+      .sort((a, b) => b.total - a.total);
+
+    return { summary, walletAlerts, altSpikes, totalTrades: recent.length };
   }, [trades, windowMs]);
 
   if (trades.length === 0) return null;
 
   const alertCount = analysis.walletAlerts.length;
+  const altSpikeCount = analysis.altSpikes.length;
 
   return (
     <div className="intel-panel">
@@ -109,6 +148,9 @@ export default function MarketIntel({ trades, expanded, onToggle }) {
           Market Intel
           {alertCount > 0 && (
             <span className="intel-alert-badge">{alertCount} contrarian</span>
+          )}
+          {altSpikeCount > 0 && (
+            <span className="intel-alt-badge">{altSpikeCount} alt spike{altSpikeCount !== 1 ? 's' : ''}</span>
           )}
         </div>
         <div className="intel-header-right">
@@ -134,6 +176,55 @@ export default function MarketIntel({ trades, expanded, onToggle }) {
 
       {expanded && (
         <div className="intel-body">
+          {/* Alt Volume Spikes */}
+          {altSpikeCount > 0 && (
+            <div className="intel-section">
+              <div className="intel-section-title">
+                &#128293; Alt Volume Spikes (5hr window)
+              </div>
+              <div className="intel-alt-spikes">
+                {analysis.altSpikes.map((s) => {
+                  const shortPct = 100 - s.longPct;
+                  const bigPrice = Number(s.biggest.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                  return (
+                    <div key={s.coin} className="intel-alt-card">
+                      <div className="intel-alt-top">
+                        <span className="intel-alt-coin">{s.coin}</span>
+                        <span className="intel-alt-vol">{fmtUsd(s.total)}</span>
+                      </div>
+                      <div className="intel-alt-bar-wrap">
+                        <div className="intel-coin-bar">
+                          <div className="intel-bar-fill long" style={{ width: `${s.longPct}%` }} />
+                          <div className="intel-bar-fill short" style={{ width: `${shortPct}%` }} />
+                        </div>
+                        <div className="intel-alt-pcts">
+                          <span className="green">{s.longPct}%L</span>
+                          <span className="red">{shortPct}%S</span>
+                        </div>
+                      </div>
+                      <div className="intel-alt-meta">
+                        <span>{s.count} trades</span>
+                        <span>
+                          Biggest: {s.biggest.side === 'B' ? '\u25B2' : '\u25BC'} {fmtUsd(s.biggest.size_usd)} @ ${bigPrice}
+                          {' '}
+                          <a
+                            href={`${HL_EXPLORER}/address/${s.biggest.taker}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="intel-wallet-addr"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {truncAddr(s.biggest.taker)}
+                          </a>
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Contrarian Wallet Alerts */}
           {alertCount > 0 && (
             <div className="intel-section">

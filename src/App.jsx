@@ -152,7 +152,7 @@ export default function App() {
       }
     }
 
-    // Dedicated alert system (whale / contrarian / accumulation) — only these 3 go to TG
+    // Dedicated alert system (whale / contrarian / accumulation / alt volume) — send to TG
     checkAlerts(trade, (alert) => {
       if (cfg.telegram_enabled) {
         sendAlertTelegram(alert).catch(() => {})

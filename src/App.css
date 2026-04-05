@@ -281,6 +281,41 @@ body{
 .intel-coin-pcts .green{color:var(--green)}
 .intel-coin-pcts .red{color:var(--red)}
 .intel-coin-counts{color:var(--text3);font-size:11px;text-align:right;font-weight:500}
+/* Alt volume spike badge + cards */
+.intel-alt-badge{
+  padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;
+  background:rgba(251,146,60,.12);color:var(--orange);text-transform:none;
+  letter-spacing:0;animation:pulse 2s infinite;margin-left:4px;
+}
+.intel-alt-spikes{display:flex;flex-direction:column;gap:8px}
+.intel-alt-card{
+  border:1px solid rgba(251,146,60,.15);
+  border-radius:var(--radius-sm);
+  background:rgba(251,146,60,.04);
+  padding:12px 14px;display:flex;flex-direction:column;gap:8px;
+}
+.intel-alt-top{
+  display:flex;align-items:center;justify-content:space-between;
+}
+.intel-alt-coin{
+  font-size:15px;font-weight:800;color:var(--orange);
+}
+.intel-alt-vol{
+  font-size:15px;font-weight:800;font-family:"JetBrains Mono",monospace;
+  color:var(--text);
+}
+.intel-alt-bar-wrap{
+  display:flex;align-items:center;gap:10px;
+}
+.intel-alt-bar-wrap .intel-coin-bar{flex:1}
+.intel-alt-pcts{display:flex;gap:6px;font-size:11px;font-weight:700;flex-shrink:0}
+.intel-alt-pcts .green{color:var(--green)}
+.intel-alt-pcts .red{color:var(--red)}
+.intel-alt-meta{
+  display:flex;align-items:center;justify-content:space-between;
+  font-size:11px;color:var(--text3);font-weight:500;gap:8px;flex-wrap:wrap;
+}
+
 .intel-empty{color:var(--text3);font-size:12px;padding:12px 0}
 
 /* ═══════════════════════════════════════════ */
