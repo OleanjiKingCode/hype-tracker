@@ -72,11 +72,7 @@ export function playBeep(freq, dur) {
 }
 
 export function loadConfig() {
-  try {
-    const saved = localStorage.getItem('hype-tracker-config')
-    if (saved) return JSON.parse(saved)
-  } catch (e) { /* ignore */ }
-  return {
+  const defaults = {
     min_trade_size_usd: 100000,
     coins: [...DEFAULT_COINS],
     direction_filter: 'all',
@@ -86,6 +82,23 @@ export function loadConfig() {
     telegram_enabled: true,
     watched_wallets: [],
   }
+  try {
+    const saved = localStorage.getItem('hype-tracker-config')
+    if (saved) {
+      const cfg = JSON.parse(saved)
+      // Always ensure ALWAYS_TRACKED coins are subscribed
+      const coinSet = new Set(cfg.coins || [])
+      for (const c of ALWAYS_TRACKED) coinSet.add(c)
+      // Add default alts if user has none
+      const hasAlts = [...coinSet].some(c => !c.includes('/') && !new Set(ALWAYS_TRACKED).has(c))
+      if (!hasAlts) {
+        for (const c of DEFAULT_ALTS) coinSet.add(c)
+      }
+      cfg.coins = [...coinSet]
+      return { ...defaults, ...cfg }
+    }
+  } catch (e) { /* ignore */ }
+  return defaults
 }
 
 export function saveConfig(cfg) {
