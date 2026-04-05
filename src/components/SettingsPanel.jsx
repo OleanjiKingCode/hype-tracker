@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { MAX_TRACKED_COINS, DEFAULT_COINS } from '../utils'
+import { MAX_TRACKED_ALTS, DEFAULT_ALTS, ALWAYS_TRACKED } from '../utils'
 
 export default function SettingsPanel({
   open,
@@ -9,9 +9,17 @@ export default function SettingsPanel({
   availableCoins,
   onTestTelegram,
 }) {
+  const alwaysSet = useMemo(() => new Set(ALWAYS_TRACKED), [])
+
+  // Extract only alt coins from saved config (filter out always-tracked)
+  const savedAlts = useMemo(() => {
+    const coins = config.coins?.length ? config.coins : [...ALWAYS_TRACKED, ...DEFAULT_ALTS]
+    return coins.filter(c => !alwaysSet.has(c))
+  }, [config.coins, alwaysSet])
+
   const [minSize, setMinSize] = useState(config.min_trade_size_usd || 100000)
   const [dirFilter, setDirFilter] = useState(config.direction_filter || 'all')
-  const [selectedCoins, setSelectedCoins] = useState(new Set(config.coins?.length ? config.coins : DEFAULT_COINS))
+  const [selectedAlts, setSelectedAlts] = useState(new Set(savedAlts))
   const [tgToken, setTgToken] = useState(config.telegram_bot_token || '')
   const [tgChat, setTgChat] = useState(config.telegram_chat_id || '')
   const [tgAlertChat, setTgAlertChat] = useState(config.telegram_alert_chat_id || '')
@@ -21,21 +29,23 @@ export default function SettingsPanel({
   const [tokenSearch, setTokenSearch] = useState('')
   const [saveNote, setSaveNote] = useState(false)
 
-  const atLimit = selectedCoins.size >= MAX_TRACKED_COINS
+  const atLimit = selectedAlts.size >= MAX_TRACKED_ALTS
 
+  // Only show coins that aren't in ALWAYS_TRACKED and aren't spot pairs
   const filteredCoins = useMemo(() => {
+    const altCoins = availableCoins.filter(c => !alwaysSet.has(c) && !c.includes('/'))
     const q = tokenSearch.trim().toUpperCase()
-    if (!q) return availableCoins
-    return availableCoins.filter(c => c.toUpperCase().includes(q))
-  }, [availableCoins, tokenSearch])
+    if (!q) return altCoins
+    return altCoins.filter(c => c.toUpperCase().includes(q))
+  }, [availableCoins, tokenSearch, alwaysSet])
 
   function toggleCoin(coin) {
-    setSelectedCoins(prev => {
+    setSelectedAlts(prev => {
       const next = new Set(prev)
       if (next.has(coin)) {
         next.delete(coin)
       } else {
-        if (next.size >= MAX_TRACKED_COINS) return prev
+        if (next.size >= MAX_TRACKED_ALTS) return prev
         next.add(coin)
       }
       return next
@@ -55,12 +65,9 @@ export default function SettingsPanel({
   }
 
   function handleSave() {
-    const coins = Array.from(selectedCoins)
-    if (coins.length === 0) {
-      // Force defaults if empty
-      coins.push(...DEFAULT_COINS)
-      setSelectedCoins(new Set(DEFAULT_COINS))
-    }
+    // Always include major coins + user-selected alts
+    const alts = Array.from(selectedAlts)
+    const coins = [...ALWAYS_TRACKED, ...alts]
     const cfg = {
       min_trade_size_usd: parseInt(minSize) || 100000,
       coins,
@@ -82,10 +89,10 @@ export default function SettingsPanel({
   }
 
   function resetDefaults() {
-    setSelectedCoins(new Set(DEFAULT_COINS))
+    setSelectedAlts(new Set(DEFAULT_ALTS))
   }
 
-  const selectedArr = Array.from(selectedCoins)
+  const selectedArr = Array.from(selectedAlts)
 
   return (
     <>
@@ -130,9 +137,9 @@ export default function SettingsPanel({
 
           {/* Token Picker */}
           <div className="section-title">
-            Tokens to Track
+            Alt Tokens to Track
             <span style={{ float: 'right', fontSize: '11px', fontWeight: 400, color: atLimit ? 'var(--red)' : 'var(--text3)' }}>
-              {selectedCoins.size}/{MAX_TRACKED_COINS}
+              {selectedAlts.size}/{MAX_TRACKED_ALTS}
             </span>
           </div>
 
@@ -155,7 +162,7 @@ export default function SettingsPanel({
               />
               <div className="token-actions">
                 <button className="btn btn-sm" onClick={resetDefaults}>Defaults</button>
-                <button className="btn btn-sm" onClick={() => setSelectedCoins(new Set())}>Clear</button>
+                <button className="btn btn-sm" onClick={() => setSelectedAlts(new Set())}>Clear</button>
               </div>
             </div>
             <div className="token-grid">
@@ -163,8 +170,8 @@ export default function SettingsPanel({
                 <div
                   key={coin}
                   className={
-                    `token-item${selectedCoins.has(coin) ? ' selected' : ''}` +
-                    (atLimit && !selectedCoins.has(coin) ? ' disabled' : '')
+                    `token-item${selectedAlts.has(coin) ? ' selected' : ''}` +
+                    (atLimit && !selectedAlts.has(coin) ? ' disabled' : '')
                   }
                   onClick={() => toggleCoin(coin)}
                 >
@@ -173,7 +180,8 @@ export default function SettingsPanel({
               ))}
             </div>
             <div className="hint">
-              Max {MAX_TRACKED_COINS} tokens. {atLimit && <b style={{ color: 'var(--yellow)' }}>Limit reached - remove one to add another.</b>}
+              Small alts for volume spike detection. Major coins (BTC, ETH, SOL, etc.) are always tracked.
+              {atLimit && <b style={{ color: 'var(--yellow)' }}> Limit reached - remove one to add another.</b>}
             </div>
           </div>
 
@@ -242,7 +250,7 @@ export default function SettingsPanel({
               onChange={e => setTgAlertChat(e.target.value)}
               placeholder="@your_channel or -1001234567890"
             />
-            <div className="hint">Dedicated channel for the 3 alert types (BTC, ETH, HYPE, SOL, GOVE). Leave empty to use the general Chat ID above.</div>
+            <div className="hint">Dedicated channel for whale, contrarian, accumulation &amp; alt volume alerts. Leave empty to use the general Chat ID above.</div>
           </div>
 
           <div className="toggle-row">

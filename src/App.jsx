@@ -4,7 +4,7 @@ import SettingsPanel from './components/SettingsPanel'
 import MarketIntel from './components/MarketIntel'
 import {
   fmtUsd, playBeep, resumeAudio, loadConfig, saveConfig,
-  fetchAllCoins, sendTelegram, sendAlertTelegram, HL_WS_URL, DEFAULT_COINS,
+  fetchAllCoins, sendTelegram, sendAlertTelegram, HL_WS_URL, DEFAULT_COINS, ALWAYS_TRACKED,
 } from './utils'
 import { checkAlerts } from './alertEngine'
 
@@ -300,8 +300,10 @@ export default function App() {
   const longPct = totalVol > 0 ? Math.round(stats.long_volume / totalVol * 100) : 0
   const shortPct = totalVol > 0 ? 100 - longPct : 0
 
-  // Active coins display
-  const activeCoins = config.coins && config.coins.length > 0 ? config.coins : DEFAULT_COINS
+  // Active alts display (filter out always-tracked majors)
+  const alwaysSet = new Set(ALWAYS_TRACKED)
+  const allCoins = config.coins && config.coins.length > 0 ? config.coins : DEFAULT_COINS
+  const activeAlts = allCoins.filter(c => !alwaysSet.has(c))
 
   return (
     <div className="app">
@@ -398,13 +400,19 @@ export default function App() {
           onChange={e => setWalletFilter(e.target.value)}
         />
         <div className="filter-divider" />
-        <span className="filter-label">Tracking</span>
+        <span className="filter-label">Alts</span>
         <div className="active-coins-bar">
-          {activeCoins.slice(0, 8).map(c => (
-            <span key={c} className="coin-tag">{c}</span>
-          ))}
-          {activeCoins.length > 8 && (
-            <span className="coin-tag-all">+{activeCoins.length - 8}</span>
+          {activeAlts.length === 0 ? (
+            <span className="coin-tag-all">none</span>
+          ) : (
+            <>
+              {activeAlts.slice(0, 8).map(c => (
+                <span key={c} className="coin-tag">{c}</span>
+              ))}
+              {activeAlts.length > 8 && (
+                <span className="coin-tag-all">+{activeAlts.length - 8}</span>
+              )}
+            </>
           )}
         </div>
       </div>

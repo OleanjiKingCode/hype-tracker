@@ -1,16 +1,27 @@
 export const HL_WS_URL = 'wss://api.hyperliquid.xyz/ws'
 export const HL_INFO_URL = 'https://api.hyperliquid.xyz/info'
 export const HL_EXPLORER = 'https://app.hyperliquid.xyz/explorer'
-export const MAX_TRACKED_COINS = 30
-export const DEFAULT_COINS = [
-  // Perps
+export const MAX_TRACKED_ALTS = 30
+
+// Always subscribed — major coins + spot pairs for whale/contrarian/accumulation alerts
+export const ALWAYS_TRACKED = [
   'BTC', 'ETH', 'SOL', 'HYPE', 'XRP', 'SUI', 'DOGE', 'LINK',
   'ONDO', 'ARB', 'PAXG', 'OP', 'AVAX', 'NEAR', 'APT', 'INJ',
-  'TIA', 'SEI', 'RENDER', 'kPEPE',
-  // Spot pairs (tracks buys/accumulation)
+  'RENDER', 'TIA', 'MKR', 'CRV', 'AERO', 'UNI', 'LTC', 'BCH',
+  'ATOM', 'FIL', 'ICP', 'ADA', 'DOT', 'MATIC', 'BNB', 'AAVE',
+  // Spot pairs
   'HYPE/USDC', 'BTC/USDC', 'ETH/USDC', 'SOL/USDC', 'PURR/USDC',
   'GLD/USDC', 'SUI/USDC', 'XRP/USDC', 'LINK/USDC', 'DOGE/USDC',
 ]
+
+// Default small alts to track for alt volume detection
+export const DEFAULT_ALTS = [
+  'kPEPE', 'SEI', 'PURR', 'JEFF', 'MOG', 'CATBAL',
+  'BUDDY', 'FARM', 'RAGE',
+]
+
+// Combined for backwards compat
+export const DEFAULT_COINS = [...ALWAYS_TRACKED, ...DEFAULT_ALTS]
 
 export function fmtUsd(v) {
   if (v >= 1e6) return '$' + (v / 1e6).toFixed(2) + 'M'
