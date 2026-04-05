@@ -19,8 +19,9 @@ const HEAVY_COINS = [
   'RENDER', 'INJ', 'TIA', 'MKR', 'CRV', 'AERO',
   'PAXG', 'GLD', 'SLV', 'UST',
 ];
-const ALT_VOLUME_THRESHOLD = 1_000_000;
 const ALT_WINDOW_MS = 5 * 60 * 60 * 1000; // 5 hours
+const ALT_ACCUM_THRESHOLD = 100_000; // $100K per wallet
+const ALT_ACCUM_MIN_TRADES = 3;
 
 function isSmallAlt(coin) {
   return !coin.includes('/') && !HEAVY_COINS.includes(coin);
@@ -109,36 +110,33 @@ export default function MarketIntel({ trades, expanded, onToggle }) {
       (a, b) => b.totalUsd - a.totalUsd,
     );
 
-    // Alt volume spikes (5 hr window, independent of selected time window)
+    // Alt wallet accumulation (5 hr window, independent of selected time window)
     const altCutoff = now - ALT_WINDOW_MS;
     const altTrades = trades.filter((t) => t.time >= altCutoff && isSmallAlt(t.coin));
-    const altCoins = {};
+    const altWalletMap = {};
     for (const t of altTrades) {
-      if (!altCoins[t.coin]) {
-        altCoins[t.coin] = { longVol: 0, shortVol: 0, count: 0, biggest: t };
+      const wallet = t.taker || '';
+      if (!wallet) continue;
+      const key = `${wallet}-${t.coin}-${t.side}`;
+      if (!altWalletMap[key]) {
+        altWalletMap[key] = { wallet, coin: t.coin, side: t.side, totalUsd: 0, tradeCount: 0, trades: [] };
       }
-      const c = altCoins[t.coin];
-      c.count++;
-      if (t.side === "B") c.longVol += t.size_usd;
-      else c.shortVol += t.size_usd;
-      if (t.size_usd > c.biggest.size_usd) c.biggest = t;
+      const g = altWalletMap[key];
+      g.totalUsd += t.size_usd;
+      g.tradeCount++;
+      g.trades.push(t);
     }
-    const altSpikes = Object.entries(altCoins)
-      .map(([coin, data]) => {
-        const total = data.longVol + data.shortVol;
-        const longPct = total > 0 ? Math.round((data.longVol / total) * 100) : 50;
-        return { coin, ...data, total, longPct };
-      })
-      .filter((s) => s.total >= ALT_VOLUME_THRESHOLD)
-      .sort((a, b) => b.total - a.total);
+    const altAccum = Object.values(altWalletMap)
+      .filter((g) => g.tradeCount >= ALT_ACCUM_MIN_TRADES && g.totalUsd >= ALT_ACCUM_THRESHOLD)
+      .sort((a, b) => b.totalUsd - a.totalUsd);
 
-    return { summary, walletAlerts, altSpikes, totalTrades: recent.length };
+    return { summary, walletAlerts, altAccum, totalTrades: recent.length };
   }, [trades, windowMs]);
 
   if (trades.length === 0) return null;
 
   const alertCount = analysis.walletAlerts.length;
-  const altSpikeCount = analysis.altSpikes.length;
+  const altAccumCount = analysis.altAccum.length;
 
   return (
     <div className="intel-panel">
@@ -149,8 +147,8 @@ export default function MarketIntel({ trades, expanded, onToggle }) {
           {alertCount > 0 && (
             <span className="intel-alert-badge">{alertCount} contrarian</span>
           )}
-          {altSpikeCount > 0 && (
-            <span className="intel-alt-badge">{altSpikeCount} alt spike{altSpikeCount !== 1 ? 's' : ''}</span>
+          {altAccumCount > 0 && (
+            <span className="intel-alt-badge">{altAccumCount} alt signal{altAccumCount !== 1 ? 's' : ''}</span>
           )}
         </div>
         <div className="intel-header-right">
@@ -176,36 +174,78 @@ export default function MarketIntel({ trades, expanded, onToggle }) {
 
       {expanded && (
         <div className="intel-body">
-          {/* Alt Volume Spikes */}
-          {altSpikeCount > 0 && (
+          {/* Alt Accumulation Signals */}
+          {altAccumCount > 0 && (
             <div className="intel-section">
               <div className="intel-section-title">
-                &#128293; Alt Volume Spikes (5hr window)
+                &#128293; Alt Accumulation (5hr window)
               </div>
-              <div className="intel-alt-spikes">
-                {analysis.altSpikes.map((s) => {
-                  const shortPct = 100 - s.longPct;
-                  const avgSize = s.count > 0 ? s.total / s.count : 0;
+              <div className="intel-alerts">
+                {analysis.altAccum.slice(0, 10).map((g, i) => {
+                  const sideLabel = g.side === "B" ? "LONG" : "SHORT";
+                  const sideClass = g.side === "B" ? "long" : "short";
+                  const key = `alt-${g.wallet}-${g.coin}-${g.side}`;
+                  const isExp = expandedWallets.has(key);
+
                   return (
-                    <div key={s.coin} className="intel-alt-card">
-                      <div className="intel-alt-top">
-                        <span className="intel-alt-coin">{s.coin}</span>
-                        <span className="intel-alt-vol">{fmtUsd(s.total)}</span>
-                      </div>
-                      <div className="intel-alt-bar-wrap">
-                        <div className="intel-coin-bar">
-                          <div className="intel-bar-fill long" style={{ width: `${s.longPct}%` }} />
-                          <div className="intel-bar-fill short" style={{ width: `${shortPct}%` }} />
+                    <div key={i} className="intel-alt-card">
+                      <div
+                        className="intel-alert-row clickable"
+                        onClick={() => toggleWallet(key)}
+                      >
+                        <div className="intel-alert-main">
+                          <a
+                            href={`${HL_EXPLORER}/address/${g.wallet}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="intel-wallet-addr"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {truncAddr(g.wallet)}
+                          </a>
+                          <span className="intel-alert-text">
+                            {" "}
+                            <span className={`intel-alert-size ${sideClass}`}>
+                              {fmtUsd(g.totalUsd)} {sideLabel}
+                            </span>
+                            {" on "}
+                            <b>{g.coin}</b>
+                            {` \u2022 ${g.tradeCount} trades`}
+                          </span>
                         </div>
-                        <div className="intel-alt-pcts">
-                          <span className="green">{s.longPct}%L</span>
-                          <span className="red">{shortPct}%S</span>
+                        <span className="intel-expand-btn">
+                          {isExp ? "\u25B2 hide" : `\u25BC ${g.tradeCount} trades`}
+                        </span>
+                      </div>
+
+                      {isExp && (
+                        <div className="intel-trade-details">
+                          {g.trades.map((t, j) => (
+                            <div key={j} className="intel-trade-detail-row">
+                              <span className="intel-detail-time">{t.time_str}</span>
+                              <span className={`intel-detail-size ${sideClass}`}>
+                                {fmtUsd(t.size_usd)}
+                              </span>
+                              <span className="intel-detail-price">
+                                @ ${Number(t.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                              <span className="intel-detail-qty">
+                                {Number(t.qty).toLocaleString(undefined, { maximumFractionDigits: 4 })} {t.coin}
+                              </span>
+                              {t.hash && t.hash !== "0x" + "0".repeat(64) && (
+                                <a
+                                  href={`${HL_EXPLORER}/tx/${t.hash}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="intel-detail-link"
+                                >
+                                  &#8599;
+                                </a>
+                              )}
+                            </div>
+                          ))}
                         </div>
-                      </div>
-                      <div className="intel-alt-meta">
-                        <span>{s.count.toLocaleString()} trades</span>
-                        <span>avg {fmtUsd(avgSize)}/trade</span>
-                      </div>
+                      )}
                     </div>
                   );
                 })}

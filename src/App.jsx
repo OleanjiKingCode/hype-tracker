@@ -8,6 +8,7 @@ import {
 } from './utils'
 import { checkAlerts } from './alertEngine'
 
+const ALWAYS_SET = new Set(ALWAYS_TRACKED)
 const MAX_TRADES = 500
 const TRADES_STORAGE_KEY = 'hype-tracker-trades'
 const STATS_STORAGE_KEY = 'hype-tracker-stats'
@@ -128,9 +129,10 @@ export default function App() {
       }
     })
 
-    // UI feed filters — only display trades above min size
+    // UI feed filters — min size applies to major coins, small alts always show
     const minSize = cfg.min_trade_size_usd || 100000
-    if (sizeUsd < minSize) return
+    const isAlt = !coin.includes('/') && !ALWAYS_SET.has(coin)
+    if (!isAlt && sizeUsd < minSize) return
 
     const dirFilter = cfg.direction_filter || 'all'
     if (dirFilter === 'long' && side !== 'B') return
@@ -303,9 +305,8 @@ export default function App() {
   const shortPct = totalVol > 0 ? 100 - longPct : 0
 
   // Active alts display (filter out always-tracked majors)
-  const alwaysSet = new Set(ALWAYS_TRACKED)
   const allCoins = config.coins && config.coins.length > 0 ? config.coins : DEFAULT_COINS
-  const activeAlts = allCoins.filter(c => !alwaysSet.has(c))
+  const activeAlts = allCoins.filter(c => !ALWAYS_SET.has(c))
 
   return (
     <div className="app">
