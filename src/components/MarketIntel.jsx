@@ -185,7 +185,7 @@ export default function MarketIntel({ trades, expanded, onToggle }) {
               <div className="intel-alt-spikes">
                 {analysis.altSpikes.map((s) => {
                   const shortPct = 100 - s.longPct;
-                  const bigPrice = Number(s.biggest.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                  const avgSize = s.count > 0 ? s.total / s.count : 0;
                   return (
                     <div key={s.coin} className="intel-alt-card">
                       <div className="intel-alt-top">
@@ -203,20 +203,8 @@ export default function MarketIntel({ trades, expanded, onToggle }) {
                         </div>
                       </div>
                       <div className="intel-alt-meta">
-                        <span>{s.count} trades</span>
-                        <span>
-                          Biggest: {s.biggest.side === 'B' ? '\u25B2' : '\u25BC'} {fmtUsd(s.biggest.size_usd)} @ ${bigPrice}
-                          {' '}
-                          <a
-                            href={`${HL_EXPLORER}/address/${s.biggest.taker}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="intel-wallet-addr"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            {truncAddr(s.biggest.taker)}
-                          </a>
-                        </span>
+                        <span>{s.count.toLocaleString()} trades</span>
+                        <span>avg {fmtUsd(avgSize)}/trade</span>
                       </div>
                     </div>
                   );

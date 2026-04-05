@@ -11,7 +11,7 @@ const ACCUMULATION_MIN_TRADES = 3        // at least 3 separate entries
 const DEDUP_COOLDOWN_MS = 5 * 60 * 1000  // don't repeat same alert within 5 min
 const MIN_MAJOR_TRADE = 50_000           // only track $50K+ trades for major coin alerts
 
-// Heavy/major coins excluded from alt volume detection
+// Heavy/major coins excluded from alt detection
 const HEAVY_COINS = [
   'BTC', 'ETH', 'SOL', 'HYPE', 'XRP', 'BNB', 'AAVE', 'LINK', 'DOGE',
   'SUI', 'AVAX', 'ONDO', 'ADA', 'DOT', 'MATIC', 'ARB', 'OP',
@@ -20,17 +20,24 @@ const HEAVY_COINS = [
   // TradFi / commodities
   'PAXG', 'GLD', 'SLV', 'UST',
 ]
-const ALT_VOLUME_WINDOW_MS = 5 * 60 * 60 * 1000  // 5 hour rolling window
-const ALT_VOLUME_THRESHOLD = 1_000_000   // $1M cumulative in 5 hr window
+const ALT_WINDOW_MS = 5 * 60 * 60 * 1000       // 5 hour rolling window
+const ALT_ACCUMULATION_THRESHOLD = 100_000      // $100K per wallet on an alt
+const ALT_ACCUMULATION_MIN_TRADES = 3           // at least 3 entries
+const ALT_DEDUP_COOLDOWN_MS = 60 * 60 * 1000   // 1 hr between repeat alerts per wallet/coin/side
 
 // Rolling state (in-memory)
 const recentTrades = []        // 30 min window (whale/contrarian/accumulation)
-const altRecentTrades = []     // 5 hr window (alt volume detection)
-const walletHistory = {}
+const walletHistory = {}       // 30 min window
+const altWalletHistory = {}    // 5 hr window — wallet -> trades on small alts
 const sentAlerts = new Map()
+const sentAltAlerts = new Map()
 
 function isSpotPair(coin) {
   return coin.includes('/')
+}
+
+function isSmallAlt(coin) {
+  return !isSpotPair(coin) && !HEAVY_COINS.includes(coin)
 }
 
 function isDuplicate(key) {
@@ -40,29 +47,41 @@ function isDuplicate(key) {
   return false
 }
 
+function isAltDuplicate(key) {
+  const last = sentAltAlerts.get(key)
+  if (last && Date.now() - last < ALT_DEDUP_COOLDOWN_MS) return true
+  sentAltAlerts.set(key, Date.now())
+  return false
+}
+
 function pruneOldData() {
   const cutoff = Date.now() - ACCUMULATION_WINDOW_MS
   while (recentTrades.length > 0 && recentTrades[0].time < cutoff) {
     recentTrades.shift()
   }
-  const altCutoff = Date.now() - ALT_VOLUME_WINDOW_MS
-  while (altRecentTrades.length > 0 && altRecentTrades[0].time < altCutoff) {
-    altRecentTrades.shift()
-  }
   for (const wallet of Object.keys(walletHistory)) {
     walletHistory[wallet] = walletHistory[wallet].filter(t => t.time >= cutoff)
     if (walletHistory[wallet].length === 0) delete walletHistory[wallet]
   }
+  const altCutoff = Date.now() - ALT_WINDOW_MS
+  for (const wallet of Object.keys(altWalletHistory)) {
+    altWalletHistory[wallet] = altWalletHistory[wallet].filter(t => t.time >= altCutoff)
+    if (altWalletHistory[wallet].length === 0) delete altWalletHistory[wallet]
+  }
   for (const [key, ts] of sentAlerts) {
     if (Date.now() - ts > DEDUP_COOLDOWN_MS) sentAlerts.delete(key)
+  }
+  for (const [key, ts] of sentAltAlerts) {
+    if (Date.now() - ts > ALT_DEDUP_COOLDOWN_MS) sentAltAlerts.delete(key)
   }
 }
 
 export function checkAlerts(trade, sendFn) {
   pruneOldData()
 
-  // Store trade in 30 min window (whale/contrarian/accumulation) — only $100K+ for majors
   const wallet = trade.taker || ''
+
+  // Store trade in 30 min window for major coin alerts ($50K+ only)
   if (trade.size_usd >= MIN_MAJOR_TRADE) {
     recentTrades.push(trade)
     if (wallet) {
@@ -71,29 +90,44 @@ export function checkAlerts(trade, sendFn) {
     }
   }
 
-  // --- ALERT 4: Alt Volume Spike ($1M+ on small alts in 5 hr window) ---
-  // Skip spot/HIP3 pairs, TradFi, and known heavy coins — only real small-cap perp alts
-  if (!isSpotPair(trade.coin) && !HEAVY_COINS.includes(trade.coin)) {
-    altRecentTrades.push(trade)
-    const coinTrades = altRecentTrades.filter(t => t.coin === trade.coin)
-    const totalVol = coinTrades.reduce((s, t) => s + t.size_usd, 0)
+  // --- ALERT 4: Alt Accumulation (wallet building position on small alt over 5 hrs) ---
+  if (wallet && isSmallAlt(trade.coin)) {
+    if (!altWalletHistory[wallet]) altWalletHistory[wallet] = []
+    altWalletHistory[wallet].push(trade)
 
-    if (totalVol >= ALT_VOLUME_THRESHOLD) {
-      const key = `alt-volume-${trade.coin}`
-      if (!isDuplicate(key)) {
-        const longVol = coinTrades.reduce((s, t) => s + (t.side === 'B' ? t.size_usd : 0), 0)
-        const shortVol = totalVol - longVol
-        const tradeCount = coinTrades.length
-        const biggest = coinTrades.reduce((max, t) => t.size_usd > max.size_usd ? t : max, coinTrades[0])
+    // Check this wallet's activity on this coin in this direction
+    const walletTrades = altWalletHistory[wallet]
+      .filter(t => t.coin === trade.coin && t.side === trade.side)
+    const cumulative = walletTrades.reduce((s, t) => s + t.size_usd, 0)
+    const count = walletTrades.length
+
+    if (count >= ALT_ACCUMULATION_MIN_TRADES && cumulative >= ALT_ACCUMULATION_THRESHOLD) {
+      const key = `alt-accum-${wallet}-${trade.coin}-${trade.side}`
+      if (!isAltDuplicate(key)) {
+        const firstTime = walletTrades[0].time
+        const lastTime = walletTrades[walletTrades.length - 1].time
+        const spanHrs = ((lastTime - firstTime) / (60 * 60 * 1000)).toFixed(1)
+        const avgPrice = walletTrades.reduce((s, t) => s + t.price, 0) / count
+        const totalQty = walletTrades.reduce((s, t) => s + t.qty, 0)
+        const trades = walletTrades.map(t => ({
+          side: t.side,
+          size_usd: t.size_usd,
+          price: t.price,
+          qty: t.qty,
+          time_str: t.time_str,
+          hash: t.hash,
+        }))
         sendFn({
-          type: 'alt_volume',
+          type: 'alt_accumulation',
+          wallet,
           coin: trade.coin,
-          totalVolume: totalVol,
-          longVolume: longVol,
-          shortVolume: shortVol,
-          tradeCount,
-          biggestTrade: biggest,
-          latestTrade: trade,
+          side: trade.side,
+          cumulative,
+          tradeCount: count,
+          spanHrs,
+          avgPrice,
+          totalQty,
+          trades,
         })
       }
     }
@@ -132,7 +166,7 @@ export function checkAlerts(trade, sendFn) {
     }
   }
 
-  // --- ALERT 3: Accumulation (same wallet, multiple entries in 5-30 min) ---
+  // --- ALERT 3: Accumulation (same wallet, multiple entries in 30 min) ---
   if (wallet) {
     const walletTrades = walletHistory[wallet]
       .filter(t => t.coin === trade.coin && t.side === trade.side)
@@ -145,7 +179,6 @@ export function checkAlerts(trade, sendFn) {
         const timeSpanMin = Math.round(
           (walletTrades[walletTrades.length - 1].time - walletTrades[0].time) / 60000
         )
-        // Include individual trade details for the message
         const trades = walletTrades.map(t => ({
           size_usd: t.size_usd,
           price: t.price,

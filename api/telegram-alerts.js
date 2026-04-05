@@ -81,36 +81,54 @@ function formatAccumulation(alert) {
   return lines.join('\n')
 }
 
-function formatAltVolume(alert) {
-  const longPct = alert.totalVolume > 0 ? Math.round((alert.longVolume / alert.totalVolume) * 100) : 0
-  const shortPct = 100 - longPct
-  const biggest = alert.biggestTrade
-  const bigPrice = Number(biggest.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+function formatAltAccumulation(alert) {
+  const side = alert.side === 'B' ? '\uD83D\uDCC8 LONG' : '\uD83D\uDCC9 SHORT'
+  const avgPrice = Number(alert.avgPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const totalQty = Number(alert.totalQty).toLocaleString(undefined, { maximumFractionDigits: 4 })
 
-  return [
-    `\uD83D\uDEA8 <b>ALT VOLUME SPIKE</b> \u2014 ${alert.coin}`,
+  const lines = [
+    `\uD83D\uDEA8 <b>ALT ACCUMULATION</b> \u2014 ${alert.coin}`,
     '',
-    `\uD83D\uDCB0 <b>${fmtUsd(alert.totalVolume)}</b> volume in 5 hrs`,
-    `\uD83D\uDCCA ${alert.tradeCount} trades`,
+    `${side} \u2022 <b>${fmtUsd(alert.cumulative)}</b> total over ${alert.spanHrs} hrs`,
     '',
-    `\uD83D\uDCC8 Long: ${fmtUsd(alert.longVolume)} (${longPct}%)`,
-    `\uD83D\uDCC9 Short: ${fmtUsd(alert.shortVolume)} (${shortPct}%)`,
+    `\uD83D\uDCCA <b>Summary:</b>`,
+    `  \u2022 Trades: <b>${alert.tradeCount}</b> entries`,
+    `  \u2022 Avg Price: $${avgPrice}`,
+    `  \u2022 Total Qty: ${totalQty} ${alert.coin}`,
     '',
-    `\uD83C\uDFC6 <b>Biggest Trade:</b>`,
-    `  ${biggest.side === 'B' ? '\uD83D\uDCC8 LONG' : '\uD83D\uDCC9 SHORT'} \u2022 ${fmtUsd(biggest.size_usd)} @ $${bigPrice}`,
-    `  \uD83D\uDC64 <a href="${HL_EXPLORER}/address/${biggest.taker}">${truncAddr(biggest.taker)}</a>`,
-    '',
-    `\u23F0 ${alert.latestTrade.time_str} UTC`,
-    '',
-    `\uD83D\uDD0D Unusual volume detected on a low-cap alt`,
-  ].join('\n')
+  ]
+
+  // Individual entries (last 8)
+  const trades = alert.trades || []
+  if (trades.length > 0) {
+    lines.push(`\uD83D\uDCDD <b>Entries:</b>`)
+    const shown = trades.slice(-8)
+    for (const t of shown) {
+      const tSide = t.side === 'B' ? 'LONG' : 'SHORT'
+      const price = Number(t.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      const hashLink = t.hash && t.hash !== '0x' + '0'.repeat(64)
+        ? ` <a href="${HL_EXPLORER}/tx/${t.hash}">\u2197</a>`
+        : ''
+      lines.push(`  ${t.time_str} \u2022 ${tSide} ${fmtUsd(t.size_usd)} @ $${price}${hashLink}`)
+    }
+    if (trades.length > 8) {
+      lines.push(`  <i>...and ${trades.length - 8} more</i>`)
+    }
+    lines.push('')
+  }
+
+  lines.push(`\uD83D\uDC64 Wallet: <a href="${HL_EXPLORER}/address/${alert.wallet}">${truncAddr(alert.wallet)}</a>`)
+  lines.push('')
+  lines.push(`\uD83D\uDD0D This wallet is building a position on a low-cap alt`)
+
+  return lines.join('\n')
 }
 
 const FORMATTERS = {
   whale: formatWhale,
   contrarian: formatContrarian,
   accumulation: formatAccumulation,
-  alt_volume: formatAltVolume,
+  alt_accumulation: formatAltAccumulation,
 }
 
 export default async function handler(req, res) {
