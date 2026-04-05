@@ -81,10 +81,36 @@ function formatAccumulation(alert) {
   return lines.join('\n')
 }
 
+function formatAltVolume(alert) {
+  const longPct = alert.totalVolume > 0 ? Math.round((alert.longVolume / alert.totalVolume) * 100) : 0
+  const shortPct = 100 - longPct
+  const biggest = alert.biggestTrade
+  const bigPrice = Number(biggest.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+  return [
+    `\uD83D\uDEA8 <b>ALT VOLUME SPIKE</b> \u2014 ${alert.coin}`,
+    '',
+    `\uD83D\uDCB0 <b>${fmtUsd(alert.totalVolume)}</b> volume in 5 hrs`,
+    `\uD83D\uDCCA ${alert.tradeCount} trades`,
+    '',
+    `\uD83D\uDCC8 Long: ${fmtUsd(alert.longVolume)} (${longPct}%)`,
+    `\uD83D\uDCC9 Short: ${fmtUsd(alert.shortVolume)} (${shortPct}%)`,
+    '',
+    `\uD83C\uDFC6 <b>Biggest Trade:</b>`,
+    `  ${biggest.side === 'B' ? '\uD83D\uDCC8 LONG' : '\uD83D\uDCC9 SHORT'} \u2022 ${fmtUsd(biggest.size_usd)} @ $${bigPrice}`,
+    `  \uD83D\uDC64 <a href="${HL_EXPLORER}/address/${biggest.taker}">${truncAddr(biggest.taker)}</a>`,
+    '',
+    `\u23F0 ${alert.latestTrade.time_str} UTC`,
+    '',
+    `\uD83D\uDD0D Unusual volume detected on a low-cap alt`,
+  ].join('\n')
+}
+
 const FORMATTERS = {
   whale: formatWhale,
   contrarian: formatContrarian,
   accumulation: formatAccumulation,
+  alt_volume: formatAltVolume,
 }
 
 export default async function handler(req, res) {

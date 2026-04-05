@@ -1,4 +1,4 @@
-// Alert Engine — monitors trades for 3 alert types on 5 key coins
+// Alert Engine — monitors trades for 4 alert types
 // Fires callbacks when alert conditions are met
 
 const ALERT_COINS = ['BTC', 'ETH', 'HYPE', 'SOL', 'PAXG', 'GLD/USDC']
@@ -10,10 +10,27 @@ const ACCUMULATION_THRESHOLD = 500_000   // cumulative $ in window
 const ACCUMULATION_MIN_TRADES = 3        // at least 3 separate entries
 const DEDUP_COOLDOWN_MS = 5 * 60 * 1000  // don't repeat same alert within 5 min
 
+// Heavy/major coins excluded from alt volume detection
+const HEAVY_COINS = [
+  'BTC', 'ETH', 'SOL', 'HYPE', 'XRP', 'BNB', 'AAVE', 'LINK', 'DOGE',
+  'SUI', 'AVAX', 'ONDO', 'ADA', 'DOT', 'MATIC', 'ARB', 'OP',
+  'NEAR', 'APT', 'UNI', 'LTC', 'BCH', 'ATOM', 'FIL', 'ICP',
+  'RENDER', 'INJ', 'TIA', 'MKR', 'CRV', 'AERO',
+  // TradFi / commodities
+  'PAXG', 'GLD', 'SLV', 'UST',
+]
+const ALT_VOLUME_WINDOW_MS = 5 * 60 * 60 * 1000  // 5 hour rolling window
+const ALT_VOLUME_THRESHOLD = 1_000_000   // $1M cumulative in 5 hr window
+
 // Rolling state (in-memory)
-const recentTrades = []
+const recentTrades = []        // 30 min window (whale/contrarian/accumulation)
+const altRecentTrades = []     // 5 hr window (alt volume detection)
 const walletHistory = {}
 const sentAlerts = new Map()
+
+function isSpotPair(coin) {
+  return coin.includes('/')
+}
 
 function isDuplicate(key) {
   const last = sentAlerts.get(key)
@@ -27,6 +44,10 @@ function pruneOldData() {
   while (recentTrades.length > 0 && recentTrades[0].time < cutoff) {
     recentTrades.shift()
   }
+  const altCutoff = Date.now() - ALT_VOLUME_WINDOW_MS
+  while (altRecentTrades.length > 0 && altRecentTrades[0].time < altCutoff) {
+    altRecentTrades.shift()
+  }
   for (const wallet of Object.keys(walletHistory)) {
     walletHistory[wallet] = walletHistory[wallet].filter(t => t.time >= cutoff)
     if (walletHistory[wallet].length === 0) delete walletHistory[wallet]
@@ -37,17 +58,46 @@ function pruneOldData() {
 }
 
 export function checkAlerts(trade, sendFn) {
-  if (!ALERT_COINS.includes(trade.coin)) return
-
   pruneOldData()
 
-  // Store trade in rolling window
+  // Store trade in 30 min window (whale/contrarian/accumulation)
   recentTrades.push(trade)
   const wallet = trade.taker || ''
   if (wallet) {
     if (!walletHistory[wallet]) walletHistory[wallet] = []
     walletHistory[wallet].push(trade)
   }
+
+  // --- ALERT 4: Alt Volume Spike ($1M+ on small alts in 5 hr window) ---
+  // Skip spot/HIP3 pairs, TradFi, and known heavy coins — only real small-cap perp alts
+  if (!isSpotPair(trade.coin) && !HEAVY_COINS.includes(trade.coin)) {
+    altRecentTrades.push(trade)
+    const coinTrades = altRecentTrades.filter(t => t.coin === trade.coin)
+    const totalVol = coinTrades.reduce((s, t) => s + t.size_usd, 0)
+
+    if (totalVol >= ALT_VOLUME_THRESHOLD) {
+      const key = `alt-volume-${trade.coin}`
+      if (!isDuplicate(key)) {
+        const longVol = coinTrades.reduce((s, t) => s + (t.side === 'B' ? t.size_usd : 0), 0)
+        const shortVol = totalVol - longVol
+        const tradeCount = coinTrades.length
+        const biggest = coinTrades.reduce((max, t) => t.size_usd > max.size_usd ? t : max, coinTrades[0])
+        sendFn({
+          type: 'alt_volume',
+          coin: trade.coin,
+          totalVolume: totalVol,
+          longVolume: longVol,
+          shortVolume: shortVol,
+          tradeCount,
+          biggestTrade: biggest,
+          latestTrade: trade,
+        })
+      }
+    }
+  }
+
+  // Alerts 1-3 only apply to major coins
+  if (!ALERT_COINS.includes(trade.coin)) return
 
   // --- ALERT 1: Whale ($700K+ single trade) ---
   if (trade.size_usd >= WHALE_THRESHOLD) {
