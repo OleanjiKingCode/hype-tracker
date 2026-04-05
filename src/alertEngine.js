@@ -31,6 +31,7 @@ const walletHistory = {}       // 30 min window
 const altWalletHistory = {}    // 5 hr window — wallet -> trades on small alts
 const sentAlerts = new Map()
 const sentAltAlerts = new Map()
+const seenHashes = new Set()   // dedup trades by tx hash
 
 function isSpotPair(coin) {
   return coin.includes('/')
@@ -74,9 +75,20 @@ function pruneOldData() {
   for (const [key, ts] of sentAltAlerts) {
     if (Date.now() - ts > ALT_DEDUP_COOLDOWN_MS) sentAltAlerts.delete(key)
   }
+  // Cap seen hashes to prevent memory bloat
+  if (seenHashes.size > 50000) {
+    const arr = [...seenHashes]
+    seenHashes.clear()
+    for (let i = arr.length - 10000; i < arr.length; i++) seenHashes.add(arr[i])
+  }
 }
 
 export function checkAlerts(trade, sendFn) {
+  // Dedup by tx hash — skip if we've already processed this trade
+  const txKey = trade.hash ? `${trade.hash}-${trade.coin}-${trade.taker}` : ''
+  if (txKey && seenHashes.has(txKey)) return
+  if (txKey) seenHashes.add(txKey)
+
   pruneOldData()
 
   const wallet = trade.taker || ''

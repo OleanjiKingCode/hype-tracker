@@ -9,6 +9,7 @@ import {
 import { checkAlerts } from './alertEngine'
 
 const ALWAYS_SET = new Set(ALWAYS_TRACKED)
+const ALT_MIN_DISPLAY = 1000   // show alt trades >= $1K in the table
 const MAX_TRADES = 500
 const TRADES_STORAGE_KEY = 'hype-tracker-trades'
 const STATS_STORAGE_KEY = 'hype-tracker-stats'
@@ -129,9 +130,10 @@ export default function App() {
       }
     })
 
-    // UI feed filters — min size applies to major coins, small alts always show
+    // UI feed filters — min size for majors, lower threshold for alts
     const minSize = cfg.min_trade_size_usd || 100000
     const isAlt = !coin.includes('/') && !ALWAYS_SET.has(coin)
+    if (isAlt && sizeUsd < ALT_MIN_DISPLAY) return
     if (!isAlt && sizeUsd < minSize) return
 
     const dirFilter = cfg.direction_filter || 'all'
@@ -291,6 +293,7 @@ export default function App() {
     if (localSideFilter === 'long' && t.side !== 'B') return false
     if (localSideFilter === 'short' && t.side === 'B') return false
     const tIsAlt = !t.coin.includes('/') && !ALWAYS_SET.has(t.coin)
+    if (tIsAlt && t.size_usd < ALT_MIN_DISPLAY) return false
     if (!tIsAlt && t.size_usd < localMinSize) return false
     if (walletQuery) {
       const taker = (t.taker || '').toLowerCase()
